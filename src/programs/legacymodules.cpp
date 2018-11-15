@@ -277,6 +277,8 @@ void registerLegacyModules(gmx::CommandLineModuleManager *manager)
                    "Writes energies to xvg files and display averages");
     registerModule(manager, &gmx_filter, "filter",
                    "Frequency filter trajectories, useful for making smooth movies");
+    registerModule(manager, &gmx_genscatt, "genscatt",
+                   "Produces atom numbers and definitions for X-ray or neutron scattering");
     registerModule(manager, &gmx_gyrate, "gyrate",
                    "Calculate the radius of gyration");
     registerModule(manager, &gmx_h2order, "h2order",
@@ -425,6 +427,7 @@ void registerLegacyModules(gmx::CommandLineModuleManager *manager)
         group.addModule("mk_angndx");
         group.addModule("trjorder");
         group.addModule("xpm2ps");
+        group.addModule("genscatt");
     }
     {
         gmx::CommandLineModuleGroup group =

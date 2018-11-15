@@ -133,6 +133,9 @@ int
 gmx_genpr(int argc, char *argv[]);
 
 int
+gmx_genscatt(int argc, char *argv[]);
+
+int
 gmx_gyrate(int argc, char *argv[]);
 
 int
