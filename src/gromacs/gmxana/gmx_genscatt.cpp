@@ -35,10 +35,10 @@
  */
 #include "gmxpre.h"
 
-#include <math.h>
-#include <string.h>
-#include <ctype.h>
-#include <time.h>
+#include <cmath>
+#include <cstring>
+#include <cctype>
+#include <ctime>
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -154,9 +154,9 @@ search_elements(const char *atom, real *mReturn, char *elem)
     int i, size;
     char el[3];
 
-    strcpy(el, atom);
+    std::strcpy(el, atom);
     el[0] = toupper(el[0]);
-    if (strlen(el) == 2)
+    if (std::strlen(el) == 2)
     {
         el[1] = tolower(el[1]);
     }
@@ -164,9 +164,9 @@ search_elements(const char *atom, real *mReturn, char *elem)
     for (i = 0; i < size; i++)
     {
         //printf("Compare .%s. with .%s.\n",el, elemmass[i].el);
-        if (! strcmp(el, elemmass[i].el))
+        if (! std::strcmp(el, elemmass[i].el))
         {
-            strcpy(elem, elemmass[i].el);
+            std::strcpy(elem, elemmass[i].el);
             *mReturn = elemmass[i].m;
             return 0;
         }
@@ -196,16 +196,16 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
     if (m < 0.0)
         gmx_fatal(FARGS, "Atom %s has mass < zero.\nThis is not implemented yet\n",
             aname);
-    if (strlen(aname) > 5)
+    if (std::strlen(aname) > 5)
         gmx_fatal(FARGS, "Atom name %s too long\n", aname);
     /* remove numbers and make fist and second char upper and lower-case, respectively */
-    strcpy(nm, aname);
+    std::strcpy(nm, aname);
     ptr = &nm[0];
     while (!isalpha(ptr[0]))
     {
         ptr++;
     }
-    if (strlen(ptr) < 1)
+    if (std::strlen(ptr) < 1)
     {
         gmx_fatal(FARGS,"Atom name %s is invalid. Maybe only numbers\n");
     }
@@ -230,21 +230,21 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
         }
 
         /* Check for water */
-        if (!strcmp(resname, "HOH") || !strcmp(resname, "SOL"))
+        if (!std::strcmp(resname, "HOH") || !std::strcmp(resname, "SOL"))
         {
             if (ptr[0] == 'O')
             {
-                strcpy(elemStr, "Owat");
+                std::strcpy(elemStr, "Owat");
                 return 0;
             }
             else if (ptr[0] == 'H')
             {
-                strcpy(elemStr, "Hwat");
+                std::strcpy(elemStr, "Hwat");
                 return 0;
             }
         }
 
-        strcpy(resnm, resname);
+        std::strcpy(resnm, resname);
         resnm[0] = toupper(resnm[0]);
         i = 1;
         while (isalpha(resname[i]))
@@ -253,9 +253,9 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
             i++;
         }
         // printf ("comparing '%s' to '%s'\n", ptr, resnm);
-        if ( ! strcmp(ptr, resnm))
+        if ( ! std::strcmp(ptr, resnm))
         {
-            strcpy(elemStr, ptr);
+            std::strcpy(elemStr, ptr);
         }
         else
         {
@@ -280,7 +280,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
         {
             // printf("Atom %s, mass %g: Found matching element: %s, mass %g\n",aname, m, elem, mass);
             bOne = TRUE;
-            strcpy(elemStr, elem);
+            std::strcpy(elemStr, elem);
         }
         else
         {
@@ -309,7 +309,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
             else if (opt->bVsites && (massdiff < 3.5) && (bCarbon || bNitrogen))
             {
                 bOne = TRUE;
-                strcpy(elemStr, elem);
+                std::strcpy(elemStr, elem);
                 if (comment)
                 {
                     sprintf(comment, "mass difference of %g au due to v-sites", massdiff);
@@ -325,7 +325,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
             else if (massdiff < opt->maxmassdiff)
             {
                 bOne = TRUE;
-                strcpy(elemStr, elem);
+                std::strcpy(elemStr, elem);
                 if (comment)
                 {
                     sprintf(comment, "large mass difference of %g au - correct?", massdiff);
@@ -342,7 +342,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
     /* fprintf(stderr,"Debug: single-character comparison results: ptr: %s, tmp: %s, elemStr: %s.\n", ptr, tmp, elemStr);*/
 
     /* check two-character elements */
-    if (strlen(ptr) == 2)
+    if (std::strlen(ptr) == 2)
     {
         if (search_elements(ptr, &mass, &elem[0]) == 0)
         {
@@ -357,7 +357,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
                 }
                 //printf("Atom %s: Found matching element: %s, mass %g\n",aname, elem, mass);
                 bTwo = TRUE;
-                strcpy(elemStr, elem);
+                std::strcpy(elemStr, elem);
             }
         }
     }
@@ -368,7 +368,7 @@ get_elem(const char *aname, const char *resname, const real m, char *elemStr, in
     else
     {
         // gmx_fatal(FARGS,"Could not identify chemical element of atom %s (mass %g)\n",aname,m);
-        strcpy(elemStr, "UNKNOWN");
+        std::strcpy(elemStr, "UNKNOWN");
         return 1;
     }
 }
@@ -404,7 +404,7 @@ write_dummy_top(const char *fn, const char *fnin,
         bNew    = TRUE;
         for (j = 0; j < ntypes; j++)
         {
-            if (!strcmp(elemStr, elemHave[j]))
+            if (!std::strcmp(elemStr, elemHave[j]))
             {
                 bNew = FALSE;
             }
@@ -415,7 +415,7 @@ write_dummy_top(const char *fn, const char *fnin,
                     elemStr, 1, top->atoms.atom[i].m);
             ntypes++;
             srenew(elemHave, ntypes);
-            strcpy(elemHave[ntypes-1], elemStr);
+            std::strcpy(elemHave[ntypes-1], elemStr);
         }
     }
 
@@ -675,7 +675,7 @@ int gmx_genscatt(int argc, char *argv[])
         atoms      = &mtop.moltype[mtop.molblock[mb].type].atoms;
 
         fnUser = opt2fn("-o", NFILE, fnm);
-        sprintf(fnout, "%.*s_%s.itp", (int)(strlen(fnUser)-4), fnUser, molname);
+        sprintf(fnout, "%.*s_%s.itp", (int)(std::strlen(fnUser)-4), fnUser, molname);
         printf("Writing scatter parameters of molecule \"%s\" into %s\n", molname, fnout);
         fp = ffopen(fnout, "w");
         fprintf(fp, "; Written by g_genscatt");
@@ -684,7 +684,7 @@ int gmx_genscatt(int argc, char *argv[])
         if (opt2bSet("-el", NFILE, fnm))
         {
             fnUser = opt2fn("-el", NFILE, fnm);
-            sprintf(fnout, "%.*s_%s.dat", (int)(strlen(fnUser)-4), fnUser, molname);
+            sprintf(fnout, "%.*s_%s.dat", (int)(std::strlen(fnUser)-4), fnUser, molname);
             printf("Writing atom assignments of molecule %s into %s\n", molname, fnout);
             fpAssign = ffopen(fnout,"w");
         }
@@ -748,8 +748,8 @@ int gmx_genscatt(int argc, char *argv[])
                 }
             }
 
-            strcpy(elems[i], elemStr);
-            if (!strcmp(elemStr, "H"))
+            std::strcpy(elems[i], elemStr);
+            if (!std::strcmp(elemStr, "H"))
             {
                 bHydrogen[i] = 1;
             }
