@@ -43,35 +43,44 @@
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
+//#include "typedefs.h"
+//#include "gbutil.h" => used for what?
+//#include "physics.h" => units.h
+//#include "macros.h"
+//#include "copyrite.h" => removed in latest gromacs
+//#include "statutil.h"=> trxio.h
 
-#include "pdbio.h"
-#include "confio.h"
-#include "symtab.h"
-#include "smalloc.h"
-#include "macros.h"
-#include "copyrite.h"
-#include "statutil.h"
-#include "string2.h"
-#include "strdb.h"
-#include "index.h"
-#include "vec.h"
-#include "typedefs.h"
-#include "gbutil.h"
-#include "strdb.h"
-#include "physics.h"
-#include "atomprop.h"
-#include "tpxio.h"
-#include "pbc.h"
-#include "princ.h"
-#include "txtdump.h"
-#include "viewit.h"
-#include "rmpbc.h"
-#include "gmx_ana.h"
+#include "gromacs/commandline/pargs.h"
+#include "gromacs/commandline/viewit.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/pdbio.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/fileio/trxio.h"
+#include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/gmxana/princ.h"
+#include "gromacs/math/units.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/state.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atomprop.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/topology/index.h"
+#include "gromacs/topology/symtab.h"
+#include "gromacs/topology/topology.h"
+#include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/strdb.h"
+#include "gromacs/utility/sysinfo.h"
+#include "gromacs/utility/txtdump.h"
+#include "gromacs/pbcutil/rmpbc.h"
 
-/* Portable version of ctime_r implemented in src/gmxlib/string2.c, but we do not want it declared in public installed headers */
-char *
-gmx_ctime_r(const time_t *clock, char *buf, int n);
-
+typedef int atom_id; // FIXME put this in wax related header file
 typedef char charElem[10];
 
 typedef struct
