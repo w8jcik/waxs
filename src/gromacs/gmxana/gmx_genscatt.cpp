@@ -33,9 +33,7 @@
  * And Hey:
  * Green Red Orange Magenta Azure Cyan Skyblue
  */
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+#include "gmxpre.h"
 
 #include <math.h>
 #include <string.h>
