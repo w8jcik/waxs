@@ -36,19 +36,19 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#include "gmx_envelope.h"
-#include "sysstuff.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-// #include "maths.h"
-// #include "gmx_fatal.h"
-#include "vec.h"
-#include "md5.h"
-#include "network.h"
-#include "gmx_omp.h"
-#include "pbc.h"
-#include "gmx_miniball.h"
+#include <math.h>
+#include <cstring>
+#include "gromacs/waxs/gmx_envelope.h"
+//#include "gromacs/swax/sysstuff.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/math/functions.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/fileio/md5.h"
+#include "gromacs/gmxlib/network.h"
+#include "gromacs/utility/gmxomp.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/waxs/gmx_miniball.h"
 
 
 /*
@@ -134,7 +134,6 @@
 #else
 #define DEBUG_PRINTF(x)
 #endif
-
 
 /* Array to average the electron density on a grid enclosing the envelope,
    such we can visualize the electron density insdide the envelope
@@ -393,7 +392,7 @@ void grid_density_write(grid_density_t* g, const char *fn)
         gmx_fatal(FARGS, "Cannot write grid density to file while the grid is still open. Did you not call grid_density_closeFrame() ?\n");
     }
 
-    fp = ffopen(fn, "w");
+    fp = gmx_ffopen(fn, "w");
     for (ix = 0; ix < g->n[XX]; ix++)
     {
         for (iy = 0; iy < g->n[YY]; iy++)
@@ -410,12 +409,12 @@ void grid_density_write(grid_density_t* g, const char *fn)
             }
         }
     }
-    ffclose(fp);
+    gmx_ffclose(fp);
 
     /* Writing in cube format */
     snew(fnCube, strlen(fn) + 10);
     sprintf(fnCube, "%s.cube", fn);
-    fp = ffopen(fnCube, "w");
+    fp = gmx_ffopen(fnCube, "w");
     fprintf(fp, "CUBE FORMAT, DENSITY INSIDE ENVELOPE\n");
     fprintf(fp, "NOTE: FACTOR OF 2 IN VECTORS AN ORIGIN IS NEEDED FOR CORRECT VISUALIZAION IN PYMOL\n");
     fprintf(fp, "%5d  %12.6f %12.6f %12.6f\n", 1, g->min[XX]*20, g->min[YY]*20, g->min[ZZ]*20);
@@ -442,7 +441,7 @@ void grid_density_write(grid_density_t* g, const char *fn)
             }
         }
     }
-    ffclose(fp);
+    gmx_ffclose(fp);
 
 }
 
@@ -829,7 +828,7 @@ icosphere_x2faceID(t_icosphere *ico, const dvec xgiven)
 
             FILE *fp;
             int k;
-            fp = ffopen("error.py", "w");
+            fp = gmx_ffopen("error.py", "w");
             fprintf(fp, "from pymol.cgo import *\nfrom pymol import cmd\n");
 
             fprintf(fp, "obj=[]\n");
@@ -848,7 +847,7 @@ icosphere_x2faceID(t_icosphere *ico, const dvec xgiven)
             /* IMPORTANT: CYLINDER statements should NOT be within a BEGIN/END block !!! */
             /* fprintf(fp, "obj.extend([END])\n\n"); */
             fprintf(fp, "cmd.load_cgo(obj,'ico_error')\n");
-            ffclose(fp);
+            gmx_ffclose(fp);
 
             /* Advanced debugging... */
             fprintf(stderr,"xgiven: %+22.15e %+22.15e %+22.15e \n", xgiven[XX], xgiven[YY], xgiven[ZZ] );
@@ -1206,7 +1205,7 @@ gmx_envelope_isInside(gmx_envelope_t e, const rvec xin)
     dvec x;
 
     normx2 = norm2(xin);
-    if (normx2 > dsqr(e->maxOuter))
+    if (normx2 > gmx::square(e->maxOuter))
     {
         return FALSE;
     }
@@ -1492,7 +1491,7 @@ gmx_envelope_smoothEnvelope(gmx_envelope_t e, double sigma)
     }
 
     cos_2sigma = cos(2*sigma);
-    sigma2     = sqr(sigma);
+    sigma2     = gmx::square(sigma);
 
     snew(outer, e->nrays);
     snew(inner, e->nrays);
@@ -1559,7 +1558,7 @@ gmx_envelope_build_md5(gmx_envelope_t e)
     // unsigned char *ptr;
     int j;
 
-    md5_init(&state);
+    gmx_md5_init(&state);
     for (j=0; j<e->nrays; j++)
     {
         sprintf(buf1, "%.3g", e->inner[j]);
@@ -1567,9 +1566,9 @@ gmx_envelope_build_md5(gmx_envelope_t e)
         sprintf(buf2, "%.3g", e->outer[j]);
         buf2[4] = '\0';
         sprintf(buf, "%s%s", buf1, buf2);
-        md5_append(&state, (md5_byte_t*) buf, 8);
+        gmx_md5_append(&state, (md5_byte_t*) buf, 8);
     }
-    md5_finish(&state, e->chksum);
+    gmx_md5_finish(&state, e->chksum);
 
     /* make a null-terminated string to be used in printf and strcmp */
     strncpy(e->chksum_str, (char*) e->chksum, 16);
@@ -1795,7 +1794,7 @@ gmx_bool bNewCorner(dvec x, dvec corner[], int ncorn, double tol)
 {
     int i;
     dvec v;
-    double tol2 = sqr(tol);
+    double tol2 = gmx::square(tol);
 
     for (i = 0; i < ncorn; i++)
     {
@@ -2561,7 +2560,7 @@ gmx_envelope_buildEnvelope_omp(gmx_envelope_t e, rvec x[], atom_id *index,
     dvec *r = e->r;
 
     e->d = dGiven;
-    d2 = sqr(e->d);
+    d2 = gmx::square(e->d);
 
     /* first check if the origin is within the envelope */
     if (e->bOriginInside == FALSE)
@@ -2652,7 +2651,7 @@ gmx_envelope_buildEnvelope_omp(gmx_envelope_t e, rvec x[], atom_id *index,
 
                    l[1,2] = x.cos(gamma) +- sqrt[ (x.cos(gamma))^2 - (x^2-d^2) ]
                 */
-                discr = sqr(r_dot_x) - (xnorm2-d2);
+                discr = gmx::square(r_dot_x) - (xnorm2-d2);
 
                 /* The origin is NOT within the sphere of radius d round x
                    -> may bet 2 solutions */
@@ -2850,7 +2849,7 @@ gmx_envelope_buildEnvelope(gmx_envelope_t e, rvec x[], atom_id *index,
     int ncont = 0;
 
     e->d = dGiven;
-    d2 = sqr(e->d);
+    d2 = gmx::square(e->d);
 
     /* first check if the origin is within the envelope */
     if (e->bOriginInside == FALSE)
@@ -2922,7 +2921,7 @@ gmx_envelope_buildEnvelope(gmx_envelope_t e, rvec x[], atom_id *index,
 
                l[1,2] = x.cos(gamma) +- sqrt[ (x.cos(gamma))^2 - (x^2-d^2) ]
             */
-            discr = sqr(r_dot_x) - (xnorm2-d2);
+            discr = gmx::square(r_dot_x) - (xnorm2-d2);
 
             /* The origin is NOT within the sphere of radius d round x
                -> may bet 2 solutions */
@@ -3110,7 +3109,7 @@ void  gmx_envelope_writeVMDCGO(gmx_envelope_t e, const char * fn, rvec rgb, real
         b = rgb[2];
     }
 
-    fp = ffopen(fn, "w");
+    fp = gmx_ffopen(fn, "w");
 
     /* Prepare molecule material.*/
     fprintf(fp, "proc draw-envelope {} {\n");
@@ -3227,7 +3226,7 @@ void  gmx_envelope_writeVMDCGO(gmx_envelope_t e, const char * fn, rvec rgb, real
         }
     }
     fprintf(fp, "\nputs \"Done drawing.\"\n}\ndraw-envelope\n");
-    ffclose(fp);
+    gmx_ffclose(fp);
     printf("Wrote envelope as VMD-tcl into %s\n", fn);
 }
 
@@ -3267,7 +3266,7 @@ void gmx_envelope_writePymolCGO(gmx_envelope_t e, const char * fn, const char *n
         alpha = 1;
     }
 
-    fp = ffopen(fn, "w");
+    fp = gmx_ffopen(fn, "w");
     /* Write origin */
     fprintf(fp, "from pymol.cgo import *\nfrom pymol import cmd\n\n");
     fprintf(fp, "obj3 = [\nCOLOR, %g, %g, %g,\n", 0.9, 0.0, 0.9);
@@ -3465,7 +3464,7 @@ void gmx_envelope_writePymolCGO(gmx_envelope_t e, const char * fn, const char *n
     fprintf(fp, "]\n\n");
     fprintf(fp, "cmd.load_cgo(obj2, '%s_mesh')\n\n", name);
 
-    ffclose(fp);
+    gmx_ffclose(fp);
     printf("Wrote envelope as pymol CGO into %s\n", fn);
 }
 
@@ -3475,13 +3474,13 @@ void gmx_envelope_writeToFile(gmx_envelope_t e, const char * fn)
     int j;
     FILE *fp;
 
-    fp = ffopen(fn, "w");
+    fp = gmx_ffopen(fn, "w");
     fprintf(fp, "%d\n", e->nrec);
     for (j = 0; j < e->nrays; j++)
     {
         fprintf(fp, "%.12g %.12g\n", e->inner[j], e->outer[j]);
     }
-    ffclose(fp);
+    gmx_ffclose(fp);
 }
 
 gmx_envelope_t gmx_envelope_readFromFile(const char * fn)
@@ -3492,7 +3491,7 @@ gmx_envelope_t gmx_envelope_readFromFile(const char * fn)
     gmx_envelope_t e;
     char fm[10] = "%lf %lf";
 
-    fp = ffopen(fn, "r");
+    fp = gmx_ffopen(fn, "r");
     if (fgets(line, 200, fp) == NULL)
     {
         gmx_fatal(FARGS, "Error while reading the first line of file %s\n", fn);
@@ -3524,7 +3523,7 @@ gmx_envelope_t gmx_envelope_readFromFile(const char * fn)
     {
         gmx_fatal(FARGS, "Expected %d inner / outer surfaces in envelope file %s. Found %d\n", nrays, j);
     }
-    ffclose(fp);
+    gmx_ffclose(fp);
     printf("Read surfaces for %d envelope rays from file %s\n", j, fn);
 
     gmx_envelope_setStats(e);
@@ -4033,7 +4032,7 @@ void
 gmx_envelope_volume_montecarlo_omp(gmx_envelope_t e, double nTry_d, int seed0)
 {
     int              i, j, iray, d, iround;
-    gmx_large_int_t  nTry = nTry_d, *nInside_round, nTryPerThread;
+    gmx_int64_t  nTry = nTry_d, *nInside_round, nTryPerThread;
     dvec             x, L, min = {1e20, 1e20, 1e20}, max = {-1e20, -1e20, -1e20};
     double           vol, volerr, *vol_round, tmp = 0;
     const int        NROUNDS = 50;
@@ -4101,7 +4100,7 @@ gmx_envelope_volume_montecarlo_omp(gmx_envelope_t e, double nTry_d, int seed0)
     {
         /* Varialbes private to each thread: */
         gmx_rng_t        rng = NULL;
-        gmx_large_int_t  imc, nInside_loc[NROUNDS];
+        gmx_int64_t  imc, nInside_loc[NROUNDS];
         rvec             R;
         unsigned int     dl, is, seed[envelope_nseed];
         char             fmt_loc[1024];
@@ -4178,7 +4177,7 @@ gmx_envelope_volume_montecarlo_omp(gmx_envelope_t e, double nTry_d, int seed0)
 
     for (iround = 0; iround < NROUNDS; iround++)
     {
-        tmp += dsqr(vol_round[iround]-vol);
+        tmp += gmx::square(vol_round[iround]-vol);
     }
     volerr = sqrt(tmp/NROUNDS) / sqrt(1.0*NROUNDS);
 
