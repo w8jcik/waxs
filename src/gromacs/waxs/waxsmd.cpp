@@ -842,7 +842,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
 }
 
 
-static void init_waxs_output(t_waxsrec *wr, const char *fnOut, gmx_output_env_t * oenv)
+static void init_waxs_output(t_waxsrec *wr, const char *fnOut, const gmx_output_env_t * oenv)
 {
     int len, i, t;
     char *base, typeStr[STRLEN], title[STRLEN];
@@ -1167,7 +1167,7 @@ void print_Ivsq(FILE *fp, t_waxsrecType *wt, double *I, double *Ierror, gmx_bool
 }
 
 void
-done_waxs_output(t_waxsrec *wr, gmx_output_env_t * oenv)
+done_waxs_output(t_waxsrec *wr, const gmx_output_env_t * oenv)
 {
     int              i, j, s, t;
     real             dq, compwater, r2;
@@ -1558,7 +1558,7 @@ done_waxs_solvent(t_waxs_solvent ws)
 
 /* NB: Only MASTER reads the waxs solvent. */
 static void
-read_waxs_solvent(gmx_output_env_t * oenv, t_waxs_solvent ws, const char *fntps, const char *fnxtc,
+read_waxs_solvent(const gmx_output_env_t * oenv, t_waxs_solvent ws, const char *fntps, const char *fnxtc,
                   gmx_bool bVerbose, t_waxsrec *wr)
 {
     rvec *xtop;
@@ -4550,7 +4550,7 @@ void
 init_waxs_md( t_waxsrec *wr,
               t_commrec *cr, t_inputrec *ir,
               gmx_mtop_t *top_global,
-              gmx_output_env_t * oenv, double t0,
+              const gmx_output_env_t * oenv, double t0,
               const char *fntpsSolv, const char *fnxtcSolv,const char *fnOut,
               const char *fnScatt,
               t_state *state_local, gmx_bool bRerunMD, gmx_bool bWaterOptSet,
