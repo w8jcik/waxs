@@ -36,14 +36,15 @@
 #ifndef _waxsrec_h
 #define _waxsrec_h
 
-#include "simple.h"
+//#include "gromacs/topology/simple.h"
 // #include "topology.h"
-#include "state.h"
-#include "oenv.h"
-#include "gmx_envelope.h"
-#include "gmx_random.h"
+#include "gromacs/mdtypes/state.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/waxs/gmx_envelope.h"
+#include "gromacs/waxs/gmx_random.h"
 
-#include "../gmxcomplex.h"
+#include "gromacs/math/gmxcomplex.h"
 
 
 #ifdef __cplusplus
