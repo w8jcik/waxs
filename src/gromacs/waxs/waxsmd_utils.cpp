@@ -36,24 +36,30 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#include "sysstuff.h"
-#include "typedefs.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-#include "vec.h"
-#include "pbc.h"
-#include "confio.h"
-#include "waxsmd_utils.h"
-#include "sftypeio.h"
-#include "do_fit.h"
-#include "gmx_miniball.h"
-#include "gmx_envelope.h"
-#include "xvgr.h"
-#include "network.h"
-#include "gmx_statistics.h"
-#include "mtop_util.h"
-#include "names.h"
+//#include "sysstuff.h"
+//#include "typedefs.h"
+#include <cstring>
+#include "gromacs/math/invertmatrix.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/groio.h"
+#include "gromacs/waxs/waxsmd_utils.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/math/do_fit.h"
+#include "gromacs/waxs/gmx_miniball.h"
+#include "gromacs/waxs/gmx_envelope.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/xvgr.h"
+#include "gromacs/gmxlib/network.h"
+#include "gromacs/statistics/statistics.h"
+#include "gromacs/topology/mtop_util.h"
+#include "gromacs/mdtypes/md_enums.h" //md_enums.h
+#include "gromacs/gmxpreprocess/notset.h"
 
 /*
  *  This source file was written by Jochen Hub.
@@ -71,7 +77,7 @@ double CMSF_q(t_cromer_mann cmsf, real q)
     /* Note: Cromer-Mann parameters use inverse Angstroem, but our q is in inv. nm.
        Also note: q/4pi = sin(theta)/lambda
     */
-    k2  = sqr(q/(4*M_PI*10));
+    k2  = gmx::square(q/(4*M_PI*10));
     for (i = 0; (i < 4); i++)
     {
         f += cmsf.a[i] * exp (-cmsf.b[i] * k2);
@@ -804,6 +810,7 @@ waxs_prepareSoluteFrame(t_waxsrec *wr, gmx_mtop_t *mtop, rvec x[], matrix box, i
     real        min = 1e20, bvec, env_R2;
     const char *warn = NULL;
     t_pbc       pbc;
+    auto xArrayRef = gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec *>(x), mtop->natoms);
 
 
     if (ePBC >= 0 && ePBC != epbcXYZ)
@@ -844,11 +851,7 @@ waxs_prepareSoluteFrame(t_waxsrec *wr, gmx_mtop_t *mtop, rvec x[], matrix box, i
         {
             /* With wr->bHaveWholeSolute == TRUE, we assume that the solute is whole in the COMPACT unit cell.
                So in case that the solute is boken in the triclinic/rectangular unit cell, first put atoms in the compact box */
-            if ( (warn = put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, mtop->natoms, x)) != NULL)
-            {
-                gmx_fatal(FARGS, "Could not put all atoms into a compact unit cell representation."
-                          "Warning was:\n%s\n", warn);
-            }
+            put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, xArrayRef);
         }
         if (wr->waxsStep == 0)
         {
@@ -995,11 +998,7 @@ waxs_prepareSoluteFrame(t_waxsrec *wr, gmx_mtop_t *mtop, rvec x[], matrix box, i
     /**** 5 ****/
     if (!wr->bHaveFittedTraj)
     {
-        if ( (warn = put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, mtop->natoms, x)) != NULL)
-        {
-            gmx_fatal(FARGS, "Could not put all atoms into a compact unit cell representation."
-                      "Warning was:\n%s\n", warn);
-        }
+        put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, xArrayRef);
     }
 
     WAXS_WRITE_FRAME_PDB_DEBUG ( wr->debugLvl > 2 || (wr->debugLvl > 1 && wr->waxsStep == 0), "all_in_box");
@@ -1110,7 +1109,8 @@ preparePureSolventFrame(t_waxs_solvent ws, int waxsStep, gmx_envelope_t envelope
     }
 
     /* All solvent atoms into the compact box */
-    put_atoms_in_compact_unitcell(ws->ePBC, ecenterTRIC, box, natoms, ws->xPrepared);
+    auto xPreparedArrayRef = gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec *>(ws->xPrepared), natoms);
+    put_atoms_in_compact_unitcell(ws->ePBC, ecenterTRIC, box, xPreparedArrayRef);
 
     /* Shift pure-solvent atoms to the center of the envelope */
     mv_boxcenter_to_rvec(ws->mtop->natoms, ws->xPrepared, envelopeCenter, box);
@@ -1141,9 +1141,11 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
 {
     int nread, i;
     rvec *xtemp = NULL;
-    char dumtitle[STRLEN];
+    char *dumtitle;
     t_atoms *dumatoms;
     matrix dummybox;
+
+    snew(dumtitle, STRLEN);
 
     if (!x_ref)
     {
@@ -1155,7 +1157,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
     }
 
 
-    get_stx_coordnum(fn, &nread);
+    get_coordnum(fn, &nread);
     snew(dumatoms,1);
     init_t_atoms(dumatoms, nread, FALSE);
 
@@ -1163,7 +1165,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
     {
         /* Whole system */
         fprintf(stderr,"\nReading fit-reference coords of: system\n");
-        read_stx_conf(fn, dumtitle, dumatoms, x_ref, NULL, NULL, dummybox);
+        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, x_ref, nullptr, dummybox);
     }
     else if (nread == nsol)
     {
@@ -1175,7 +1177,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
         }
 
         fprintf(stderr,"\nReading fit-reference coords of: solute\n");
-        read_stx_conf(fn, dumtitle, dumatoms, xtemp, NULL, NULL, dummybox);
+        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
         for (i=0; i<nread; i++)
         {
             copy_rvec(xtemp[i],x_ref[isol[i]]);
@@ -1191,7 +1193,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
         }
 
         fprintf(stderr,"\nReading fit-reference coords of: fit-group\n");
-        read_stx_conf(fn, dumtitle, dumatoms, xtemp, NULL, NULL, dummybox);
+        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
         for (i=0; i<nread; i++)
         {
             copy_rvec(xtemp[i],x_ref[ifit[i]]);
@@ -1209,8 +1211,18 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
         sfree(xtemp);
     }
 
-    free_t_atoms(dumatoms, FALSE);
+    // Free t_atoms
+    sfree(dumatoms->atomname);
+    sfree(dumatoms->resinfo);
+    sfree(dumatoms->atom);
+    if (dumatoms->pdbinfo)
+    {
+        sfree(dumatoms->pdbinfo);
+    }
+    dumatoms->nr   = 0;
+    dumatoms->nres = 0;
 
+    sfree(dumtitle);
 }
 
 /* Return x,y and z from the cell index */
@@ -1296,7 +1308,7 @@ atom_types_rdfs_slow(int nFramesLocal, rvec *x[], matrix *box, int nTypes, int *
     double incr;
 
     dr    = rmax/nR;
-    rmax2 = sqr(rmax);
+    rmax2 = gmx::square(rmax);
 
     if (nFramesLocal > 0)
     {
@@ -1378,7 +1390,7 @@ atom_types_rdfs(int nFramesLocal, rvec *x[], matrix *box, int nTypes, int *isize
         ePBC  = guess_ePBC(box[0]);
     }
     dr    = rmax/nR;
-    rmax2 = sqr(rmax);
+    rmax2 = gmx::square(rmax);
 
     if (bVerbose)
     {
@@ -1416,7 +1428,7 @@ atom_types_rdfs(int nFramesLocal, rvec *x[], matrix *box, int nTypes, int *isize
             r = sqrt(norm2(box[ifr][d]));
             svmul(1./r, box[ifr][d], boxvecnorm[d]);
         }
-        m_inv_ur0(boxvecnorm, transf);
+        gmx::invertBoxMatrix(boxvecnorm, transf);
 
         for (t1 = 0; t1 < nTypes; t1++)
         {
@@ -2048,7 +2060,7 @@ do_pure_solvent_intensity(t_waxsrec *wr, t_commrec *cr, gmx_mtop_t *mtop, rvec *
                     if (fade > 0 && r >= fade)
                     {
                         /* Smoothly switch off RDF behind r = fade */
-                        rdf[tt][i] = 1 + (rdf[tt][i]-1)*exp(-16*sqr(r/fade-1));
+                        rdf[tt][i] = 1 + (rdf[tt][i]-1)*exp(-16*gmx::square(r/fade-1));
                     }
                 }
             }
@@ -2126,12 +2138,12 @@ do_pure_solvent_intensity(t_waxsrec *wr, t_commrec *cr, gmx_mtop_t *mtop, rvec *
 
     if (MASTER(cr))
     {
-        fp = ffopen(fnIntensity, "w");
+        fp = gmx_ffopen(fnIntensity, "w");
         for (i=0; i<nq; i++)
         {
             fprintf(fp, "%g %g\n", 1.0*i*qmax/(nq-1), intensitySum[i]);
         }
-        ffclose(fp);
+        gmx_ffclose(fp);
         printf("Wrote solvent intensity to %s\n", fnIntensity);
     }
 
@@ -2148,7 +2160,7 @@ do_pure_solvent_intensity(t_waxsrec *wr, t_commrec *cr, gmx_mtop_t *mtop, rvec *
             for (i=0; i<nR; i++)
             {
                 fprintf(fp, "%g %g\n", (i+0.5)*rMax/nR, rdf[tt][i]);
-                fprintf(fpr, "%g %g\n", (i+0.5)*rMax/nR, (rdf[tt][i]-1)*sqr((i+0.5)*rMax/nR));
+                fprintf(fpr, "%g %g\n", (i+0.5)*rMax/nR, (rdf[tt][i]-1)*gmx::square((i+0.5)*rMax/nR));
             }
             fprintf(fp, "&\n");
             fprintf(fpr, "&\n");
@@ -2279,7 +2291,7 @@ guinierFit(t_waxsrecType *wt, double *I, double *varI, double RgSolute)
 
     for (i=0; i<n; i++)
     {
-        x[i]    = sqr(wt->minq+i*dq);
+        x[i]    = gmx::square(wt->minq+i*dq);
         y[i]    = log(I[i]);
         yerr[i] = bHaveErrors ? sqrt(varI[i])/I[i] : 1.0;
     }
@@ -2338,7 +2350,7 @@ average_stddev_d(double *x, int n, double *av, double *sigma, double *wptr)
     {
         w    = wptr ? wptr[i] : 1.;
         tmp  = x[i] - (*av);
-        var += w*dsqr(tmp);
+        var += w*gmx::square(tmp);
     }
     var /= wsum;
     *sigma = sqrt(var);
@@ -2389,7 +2401,7 @@ sum_squared_residual_d(double *x, double *y, int n, double *chi2, double *wptr)
     for (i = 0; i < n; i++)
     {
         w      = wptr ? wptr[i] : 1.;
-        (*chi2) += w * dsqr((x[i] - y[i]));
+        (*chi2) += w * gmx::square((x[i] - y[i]));
     }
 }
 
@@ -2787,7 +2799,7 @@ waxsTimingWriteLast(t_waxsTiming t, FILE *fp)
 
 /* Formatted writing to log file */
 void
-print2log(FILE *fp, const char *s, char *fmt, ...)
+print2log(FILE *fp, char const *s, char *fmt, ...)
 {
     va_list ap;
     char buf[STRLEN], *p, *p1 = fmt;

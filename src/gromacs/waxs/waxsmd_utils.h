@@ -1,9 +1,10 @@
-#include "sysstuff.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-#include "vec.h"
-#include "waxsmd.h"
+//#include "sysstuff.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/waxs/waxsmd.h"
+#include "gromacs/topology/idef.h"
 
 
 #ifndef GMX_WAXSMD_UTILS_H
