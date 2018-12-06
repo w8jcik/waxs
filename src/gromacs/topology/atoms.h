@@ -71,6 +71,8 @@ typedef struct t_atom
     int            resind;      /* Index into resinfo (in t_atoms)      */
     int            atomnumber;  /* Atomic Number or 0                   */
     char           elem[4];     /* Element name                         */
+    int            cmtype;      /* Cromer-Mann type                     */
+    int            nsltype;     /* Neutron scattering length type       */
 } t_atom;
 
 typedef struct t_resinfo
