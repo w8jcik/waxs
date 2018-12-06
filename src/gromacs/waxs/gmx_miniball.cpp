@@ -33,13 +33,13 @@
 //    http://www.inf.ethz.ch/personal/gaertner
 
 
-#include "sysstuff.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-#include "gmx_fatal.h"
-#include "vec.h"
-#include "gmx_miniball.h"
+#include "gromacs/waxs/gmx_miniball.h"
+//#include "gromacs/swax/sysstuff.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/utility/cstringutil.h"
 
 // #define MINIBALL_DEBUG
 

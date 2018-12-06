@@ -33,11 +33,12 @@
 //    CH-8092 Zuerich, Switzerland
 //    http://www.inf.ethz.ch/personal/gaertner
 
-#include "visibility.h"
-#include "typedefs.h"
-#include "sysstuff.h"
-#include "types/commrec.h"
-#include "types/pbc.h"
+//#include "visibility.h"
+//#include "typedefs.h"
+//#include "sysstuff.h"
+//#include "gromacs/swax/sysstuff.h"
+#include "gromacs/mdtypes/commrec.h"
+#include "gromacs/pbcutil/pbc.h"
 
 /* Here, specify if Miniball should run in single or double precision */
 typedef double NT;
