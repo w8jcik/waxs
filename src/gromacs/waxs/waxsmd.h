@@ -106,7 +106,7 @@ int map_indices_molblock_atoms( gmx_mtop_t *mtop, int *map );
 void init_waxs_md( t_waxsrec *wr,
                    t_commrec *cr, t_inputrec *ir,
                    gmx_mtop_t *top_global,
-                   const gmx_output_env_t oenv, double t0,
+                   const gmx_output_env_t * oenv, double t0,
                    const char *fntpsSolv, const char *fnxtcSolv,const char *fnOut,
                    const char *fnScatt,
                    t_state *state_local, gmx_bool bRerunMD, gmx_bool bWaterOptSet,
@@ -132,7 +132,7 @@ t_spherical_map *gen_qvecs_map( real minq, real maxq, int nqabs, int J,
 /* Header placement obsoleted by done_waxs_md*/
 void done_waxs_solvent(t_waxs_solvent ws );
 
-void done_waxs_output(t_waxsrec *wr, gmx_output_env_t oenv);
+void done_waxs_output(t_waxsrec *wr, const gmx_output_env_t * oenv);
 
 void waxs_ensemble_average(t_waxsrec *wr, t_waxsrecType *wt, t_commrec *cr, int iq, gmx_bool bVerbose);
 

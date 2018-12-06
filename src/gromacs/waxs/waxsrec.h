@@ -43,6 +43,7 @@
 #include "gromacs/fileio/oenv.h"
 #include "gromacs/waxs/gmx_envelope.h"
 #include "gromacs/waxs/gmx_random.h"
+#include "gromacs/topology/topology.h"
 
 #include "gromacs/math/gmxcomplex.h"
 

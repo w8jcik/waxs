@@ -126,6 +126,8 @@
 #include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/waxs/waxsmd.h"
 
 #include "deform.h"
 #include "membed.h"
@@ -717,6 +719,32 @@ double gmx::do_md(FILE *fplog, t_commrec *cr, const gmx::MDLogger &mdlog,
         {
             nstfep = gmx_greatest_common_divisor(replExParams.exchangeInterval, nstfep);
         }
+    }
+
+    /* Prepare WAXS-MD data. */
+    if (ir->waxs_nTypes > 0)
+    {
+        if (startingFromCheckpoint)
+        {
+            /* At present, you need to rerun grompp to restart a SAXS-driven MD. This is required
+               to make sure that the posres reference coordinates are updated. Posres is used during
+               tau < (simtime-simtime0) < 2tau to make sure the structure is not drifting due to the
+               absence of the SAXS-derived forces */
+            gmx_fatal(FARGS, "With WAXS-MD, you cannot restart from a checkpoint file. Rerun grompp and start with a new tpr file.\n"
+                      "This is required to make sure that the posres reference coordinates are updated.\n");
+        }
+
+        fr->waxsrec = init_t_waxsrec();
+        if(fr->cutoff_scheme == ecutsVERLET )
+        {
+            fr->waxsrec->bUseGPU = fr->nbv->bUseGPU ;
+        }
+
+        init_waxs_md( fr->waxsrec, cr, ir, top_global, oenv, t0,
+                      opt2fn("-sw",nfile,fnm), opt2fn("-fw",nfile,fnm), opt2fn("-ow",nfile,fnm),
+                      opt2fn("-is",nfile,fnm), state,
+                      bRerunMD, opt2bSet("-sw",nfile,fnm) || opt2bSet("-fw",nfile,fnm),
+                      opt2bSet("-is",nfile,fnm));
     }
 
     /* Be REALLY careful about what flags you set here. You CANNOT assume
@@ -2018,6 +2046,37 @@ double gmx::do_md(FILE *fplog, t_commrec *cr, const gmx::MDLogger &mdlog,
                        eprAVER, mdebin, fcd, groups, &(ir->opts), ir->awh);
         }
     }
+    
+    if (ir->waxs_nTypes > 0)
+    {
+        if (fr->waxsrec->ewaxsaniso == ewaxsanisoNO && !fr->waxsrec->bHaveNindep)
+        {
+            /* If we don't have Nindep yet: Get em now and scale var(I) accordingly */
+            if (MASTER(cr))
+            {
+                printf("Reached end of simulation, number of independent points were not not"
+                       " yet computed. Doing now.\n");
+            }
+            waxsEstimateNumberIndepPoints(fr->waxsrec, cr, TRUE, TRUE);
+        }
+        if (MASTER(cr))
+        {
+            waxs_alloc_globalavs(fr->waxsrec);
+        }
+        if (PAR(cr))
+        {
+            waxsDoMPIComm_qavgs(fr->waxsrec, cr, TRUE);
+        }
+        if (MASTER(cr))
+        {
+            /* Write final WAXS output */
+            done_waxs_output(fr->waxsrec, oenv);
+            waxs_free_globalavs(fr->waxsrec);
+        }
+        done_waxs_md(fr->waxsrec);
+        done_t_waxsrec(fr->waxsrec);
+    }
+    
     // TODO Enable the next line when merging to master branch
     // done_ebin(mdebin->ebin);
     done_mdoutf(outf);
