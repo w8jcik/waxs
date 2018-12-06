@@ -88,6 +88,10 @@ typedef struct t_grpopts {
     real        *SAon;         /* at which gap (A.U.) the SA is switched on    */
     real        *SAoff;
     int         *SAsteps;      /* in how many steps SA goes from 1-1 to 0.5-0.5*/
+
+    /* WAXS stuff */
+    gmx_bool *bWAXSSolute;
+    gmx_bool *bWAXSSolvent;
 } t_grpopts;
 
 typedef struct t_simtemp {
@@ -398,6 +402,38 @@ struct t_inputrec
     gmx_bool                 useTwinRange; // Whether twin-range scheme is active - always false if a valid .tpr was read
 
     gmx::KeyValueTreeObject *params;
+
+    int             waxs_nTypes;              /* Number of scattering types (xray and neutron scattering types) */
+    int            *escatter;                 /* Scattering type, size waxs_nTypes                              */
+    real            waxs_tau;                 /* WAXS coupling time constant                  */
+    int             ewaxs_potential;          /* Form of the WAXS potential (log or linear scale) */
+    int             ewaxs_weights;            /* Weights for WAXS potential (uniform, experiment, experiment+calculated) */
+    int             ewaxs_ensemble_type;    /* WAXS ensemble type (none, bayesian_fixed, bayesian_allopt) */
+    real           *waxs_fc;                /* WAXS coupling force constant (size waxs_nTypes)             */
+    real            waxs_t_target;          /* Gradual switch taret spectrum from current to input pattern */
+    int             waxs_nstcalc;           /* Frequence of calculating WAXS spectrum       */
+    int             waxs_nfrsolvent;        /* Nr of pure solvent structure factors to compute */
+    int            *waxs_nq;                /* WAXS: nr of q points (for X-ray and neutron) (size waxs_nTypes)  */
+    real           *waxs_start_q;           /* Starting and ending q                        (size waxs_nTypes)  */
+    real           *waxs_end_q;
+    real           *waxs_deuter_conc;       /* Deuterium concentration */
+    int             waxs_J;                 /* WAXS: nr of points for spherical average     */
+    int             ewaxs_Iexp_fit;         /* Fitting I_exp on the fly as f*I+c or f*I or no fitting */
+    real            waxs_denssolvent;       /* electron density of solvent (0 = use xtc, experiment = 334) */
+    real            waxs_denssolventRelErr; /* Relative uncertainty of solvent density - translates into an uncertainty of I(q) for coupling */
+    int             ewaxs_solvdensUnsertBayesian; /* Bayesian treatment of solvent density uncertainty */
+    int             ewaxs_correctbuff;      /* Add back oversubtracted buffer          */
+    int             ewaxs_bScaleI0;         /* Scale I(q=0) to target. Useful at low/noisy contrast */
+    real            waxs_warn_lay;          /* Warn if layer gets thinner than this (with sphere layer) */
+    int             waxs_nstlog;            /* Log output frequency for WAXS stuff          */
+    real            waxs_xray_energy;       /* Energy of incoming Xray (keV)               */
+    int*            waxs_pbcatoms;          /* Solute PBC atom                             */
+    int             waxs_npbcatom;          /* Number of solute PBC atoms                  */
+    int             ewaxsaniso;             /* Anisotropic pattern: No, yes, cos2           */
+    int             waxs_ensemble_nstates;  /* Number of states of which the relative weight will be refined */
+    real*           waxs_ensemble_init_w;   /* initial weights of states (should be waxs_ensemble_nstates, and sum must be <=1) 
+                                               The weight of the MD simulation state will be set to 1 - sum_i waxs_ensemble_init_w[i] */
+    real            waxs_ensemble_fc;       /* Force constant for weights */
 };
 
 int ir_optimal_nstcalcenergy(const t_inputrec *ir);
