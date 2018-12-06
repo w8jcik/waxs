@@ -149,6 +149,41 @@ const char *efpt_singular_names[efptNR+1] = {
     "fep-lambda", "mass-lambda", "coul-lambda", "vdw-lambda", "bonded-lambda", "restraint-lambda", "temperature-lambda", nullptr
 };
 
+/*
+ *   mdp names for SAXS code
+ */
+const char *escatter_names[escatterNR+1] = {
+    "xray", "neutron", nullptr
+};
+const char *waxspotential_names[ewaxsPotentialNR+1] = {
+    "linear", "log", nullptr
+};
+const char *waxsweights_names[ewaxsWeightsNR+1] = {
+    "uniform", "exp", "exp+calc", "exp+solvdens", "exp+calc+solvdens", nullptr
+};
+const char *waxsensemble_names[ewaxsEnsembleNR+1] = {
+    "none", "bayesian-one-refined", "maxent-ensemble", nullptr
+};
+const char *solvdensUnsertBayesian_names[ewaxsSolvdensUncertBayesianNR+1] = {
+    "no", "yes", nullptr
+};
+const char *waxs_Iexp_fit_names[ewaxsIexpFitNR+1] = {
+    "no", "scale-and-offset", "scale", nullptr
+};
+const char *waxssolvdensunsertbayesian_names[ewaxsSolvdensUncertBayesianNR+1] = {
+  "no", "yes", nullptr
+};
+const char *waxscorrectbuff_names[waxscorrectbuffNR+1] = {
+  "no", "yes", nullptr
+};
+const char *waxs_bScaleI0_names[ewaxsscalei0NR+1] = {
+  "no", "yes", nullptr
+};
+const char *waxsaniso_names[ewaxsanisoNR+1] = {
+    "no", "yes", "cos2alpha", nullptr
+};
+/* End of mdp names for SAXS code */
+
 const char *edHdLPrintEnergy_names[edHdLPrintEnergyNR+1] = {
     "no", "total", "potential", "yes", nullptr
 };

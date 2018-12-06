@@ -59,6 +59,7 @@ struct t_forcetable;
 struct t_nblist;
 struct t_nblists;
 struct t_QMMMrec;
+struct t_waxsrec;
 
 #ifdef __cplusplus
 extern "C" {
@@ -377,6 +378,9 @@ struct t_forcerec {
     /* QM-MM neighborlists */
     struct t_nblist        *QMMMlist;
 
+    /* WAXS stuff */
+    struct t_waxsrec       *waxsrec;
+    
     /* Limit for printing large forces, negative is don't print */
     real print_force;
 

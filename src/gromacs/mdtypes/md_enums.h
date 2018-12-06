@@ -430,6 +430,64 @@ extern const char *dhdl_derivatives_names[edhdlderivativesNR+1];
 //! YAMM (Yet another monster macro)
 #define DHDLDERIVATIVESTYPE(e) enum_name(e, edhdlderivativesNR, dhdl_derivatives_names)
 
+/* Scattering selection */
+enum {
+    escatterXRAY, escatterNEUTRON, escatterNR
+};
+extern const char *escatter_names[escatterNR+1];
+#define ESCATTER(e) enum_name(e,escatterNR, escatter_names)
+
+enum {
+    ewaxsPotentialLINEAR, ewaxsPotentialLOG, ewaxsPotentialNR
+};
+extern const char *waxspotential_names[ewaxsPotentialNR+1];
+#define EWAXSPOTENTIAL(e) enum_name(e, ewaxsPotentialNR, waxspotential_names)
+
+enum {
+    ewaxsIexpFit_NO, ewaxsIexpFit_SCALE_AND_OFFSET, ewaxsIexpFit_SCALE, ewaxsIexpFitNR
+};
+extern const char *waxs_Iexp_fit_names[ewaxsIexpFitNR+1];
+#define EWAXSIEXPFIT(e) enum_name(e, ewaxsIexpFitNR, waxs_Iexp_fit_names)
+
+enum {
+    ewaxsEnsembleNone, ewaxsEnsemble_BayesianOneRefined, ewaxsEnsemble_maxentEnsemble, ewaxsEnsembleNR
+};
+extern const char *waxsensemble_names[ewaxsEnsembleNR+1];
+#define EWAXSENSEMBLES(e) enum_name(e, ewaxsEnsembleNR, waxsensemble_names)
+
+enum {
+    ewaxsWeightsUNIFORM, ewaxsWeightsEXPERIMENT, ewaxsWeightsEXP_plus_CALC, ewaxsWeightsEXP_plus_SOLVDENS,
+    ewaxsWeightsEXP_plus_CALC_plus_SOLVDENS, ewaxsWeightsNR
+};
+extern const char *waxsweights_names[ewaxsWeightsNR+1];
+#define EWAXSWEIGHTS(e) enum_name(e, ewaxsWeightsNR, waxsweights_names)
+
+enum {
+    ewaxsSolvdensUncertBayesian_NO, ewaxsSolvdensUncertBayesian_YES, ewaxsSolvdensUncertBayesianNR
+};
+extern const char *waxssolvdensunsertbayesian_names[ewaxsSolvdensUncertBayesianNR+1];
+#define EWAXSSOLVDENSUNCERTBAYESIAN(e) enum_name(e, ewaxsSolvdensUncertBayesianNR, waxssolvdensunsertbayesian_names)
+
+/* Scaling I(q=0) to target */
+enum {
+    ewaxsscalei0NO, ewaxsscalei0YES, ewaxsscalei0NR
+};
+extern const char *waxs_bScaleI0_names[ewaxsscalei0NR+1];
+#define EWAXSBSCALEI0(e) enum_name(e, ewaxsscalei0NR, waxs_bScaleI0_names)
+
+/* Adding back oversubtracted buffer */
+enum {
+    waxscorrectbuffNO, waxscorrectbuffYES, waxscorrectbuffNR
+};
+extern const char *waxscorrectbuff_names[waxscorrectbuffNR+1];
+#define EWAXSCORRECTBUFF(e)enum_name(e, waxscorrectbuffNR, waxscorrectbuff_names)
+
+/* Anisotropic scattering pattern */
+enum {
+    ewaxsanisoNO, ewaxsanisoYES, ewaxsanisoCOS2, ewaxsanisoNR
+};
+#define EWAXSANISO(e) enum_name(e, ewaxsanisoNR, waxsaniso_names)
+extern const char *waxsaniso_names[ewaxsanisoNR+1];
 /*! \brief Solvent model
  *
  * Distinguishes classical water types with 3 or 4 particles

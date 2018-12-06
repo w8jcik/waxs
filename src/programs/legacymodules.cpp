@@ -279,6 +279,8 @@ void registerLegacyModules(gmx::CommandLineModuleManager *manager)
                    "Frequency filter trajectories, useful for making smooth movies");
     registerModule(manager, &gmx_genscatt, "genscatt",
                    "Produces atom numbers and definitions for X-ray or neutron scattering");
+    registerModule(manager, &gmx_genenv, "genenv",
+                   "Generates an envelop containing all atoms in a given trajectory");
     registerModule(manager, &gmx_gyrate, "gyrate",
                    "Calculate the radius of gyration");
     registerModule(manager, &gmx_h2order, "h2order",
@@ -428,6 +430,7 @@ void registerLegacyModules(gmx::CommandLineModuleManager *manager)
         group.addModule("trjorder");
         group.addModule("xpm2ps");
         group.addModule("genscatt");
+        group.addModule("genenv");
     }
     {
         gmx::CommandLineModuleGroup group =

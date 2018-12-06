@@ -44,11 +44,13 @@
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/idef.h"
 #include "gromacs/topology/symtab.h"
+#include "gromacs/waxs/waxstop.h"
 
 enum {
     egcTC,    egcENER,   egcACC, egcFREEZE,
     egcUser1, egcUser2,  egcVCM, egcCompressedX,
-    egcORFIT, egcQMMM,
+    egcORFIT, egcQMMM,   egcWAXSSolute, egcWAXSSolvent,
+    egcROTFIT,
     egcNR
 };
 /* Names corresponding to groups */
@@ -115,6 +117,7 @@ typedef struct gmx_mtop_t
     int              maxres_renum;                /* Parameter for residue numbering      */
     int              maxresnr;                    /* The maximum residue number in moltype */
     t_atomtypes      atomtypes;                   /* Atomtype properties                  */
+    t_scatt_types    scattTypes;                  /* Scattering factor types (xray and neutron) */
     t_block          mols;                        /* The molecules                        */
     gmx_groups_t     groups;
     t_symtab         symtab;                      /* The symbol table                     */

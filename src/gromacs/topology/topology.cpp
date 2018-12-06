@@ -51,10 +51,13 @@
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/txtdump.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/waxs/waxstop.h"
 
 const char *gtypes[egcNR+1] = {
     "T-Coupling", "Energy Mon.", "Acceleration", "Freeze",
-    "User1", "User2", "VCM", "Compressed X", "Or. Res. Fit", "QMMM", nullptr
+    "User1", "User2", "VCM", "Compressed X", "Or. Res. Fit", "QMMM",
+    "Waxs Solute", "WaxsSolvent", nullptr
 };
 
 static void init_groups(gmx_groups_t *groups)
@@ -82,6 +85,7 @@ void init_mtop(gmx_mtop_t *mtop)
     init_groups(&mtop->groups);
     init_block(&mtop->mols);
     open_symtab(&mtop->symtab);
+    init_scattering_types(&mtop->scattTypes);
 }
 
 void init_top(t_topology *top)
@@ -169,6 +173,7 @@ void done_mtop(gmx_mtop_t *mtop)
     done_atomtypes(&mtop->atomtypes);
     done_gmx_groups_t(&mtop->groups);
     done_block(&mtop->mols);
+    done_scattering_types(&mtop->scattTypes);
 }
 
 void done_top(t_topology *top)
