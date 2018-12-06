@@ -127,6 +127,9 @@ int
 gmx_filter(int argc, char *argv[]);
 
 int
+gmx_genenv(int argc, char *argv[]);
+
+int
 gmx_genion(int argc, char *argv[]);
 
 int

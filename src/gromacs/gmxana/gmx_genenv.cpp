@@ -103,7 +103,7 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
                                  atom_id *index_solute, int nsolute,
                                  rvec *xref, real *w_rls, int nfit, atom_id *ifit, gmx_bool bFit, gmx_bool bCentBoundingSphere,
                                  int nAtomsTotal,
-                                 real sigma_smooth, t_trxstatus *status, output_env_t oenv, t_topology *top,
+                                 real sigma_smooth, t_trxstatus *status, gmx_output_env_t * oenv, t_topology *top,
                                  const char *ndxfile, int nrec, const char *tprfile, const char *solvdensfile,
                                  int ePBC)
 {
@@ -123,6 +123,7 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
     FILE                  *fp;
     const int              nWarnMax = 20;
     int                    nThreads = gmx_omp_get_max_threads();
+    gmx::ArrayRef<gmx::RVec> xreadArrayRef;
 
     if (nd < 2)
     {
@@ -151,18 +152,19 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
 
 
     /* Read mtop from tpr file and make list of number of electrons for all atoms */
-    read_tpxheader(tprfile, &tpx, TRUE, &version, &generation);
+    read_tpxheader(tprfile, &tpx, TRUE);
     snew(top_x, tpx.natoms);
     if (tpx.natoms != nAtomsTotal)
     {
         gmx_incons("Atom number mismatch in solvent_density_scan()\n");
     }
-    read_tpx(tprfile, NULL, box, &natoms_tpr, top_x, NULL, NULL, &mtop);
+    read_tpx(tprfile, NULL, box, &natoms_tpr, top_x, NULL, &mtop);
     nElecList = make_nElecList(&mtop);
 
     /* Read first frame of the xtc file */
     snew(xread, nAtomsTotal);
-    read_next_x(oenv, status, &t, nAtomsTotal, xread, box);
+    xreadArrayRef = gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec *>(xread), nAtomsTotal);
+    read_next_x(oenv, status, &t, xread, box);
 
     clear_rvec(origin);
 
@@ -179,11 +181,7 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
         mv_cog_to_rvec(nAtomsTotal, xread, index_solute, nsolute, boxcenter, NULL);
 
         /* 3) put all atoms into the compact unit cell */
-        if ( (warn = put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, nAtomsTotal, xread)) != NULL)
-        {
-            gmx_fatal(FARGS, "Could not put all atoms into a compact unit cell representation."
-                      "Warning was:\n%s\n", warn);
-        }
+        put_atoms_in_compact_unitcell(ePBC, ecenterTRIC, box, xreadArrayRef);
 
         /* 4) Check if the protein has a reasonable distance from the box surface */
         check_prot_box_distance(xread, index_solute, nsolute, box, NULL, FALSE, &boxdist);
@@ -272,11 +270,11 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
 
             /* Keep sum and sum^2 to compute errors below */
             nElecInLayer    [iEnv] += nElecReduce;
-            nElecInLayer_sqr[iEnv] += dsqr(nElecReduce);
+            nElecInLayer_sqr[iEnv] += gmx::square(nElecReduce);
         }
 
         nframes++;
-    } while (read_next_x(oenv, status, &t, nAtomsTotal, xread, box));
+    } while (read_next_x(oenv, status, &t, xread, box));
 
     fp = xvgropen(solvdensfile, "Solvent density", "R (nm)", "density (e/nm\\S3\\N)", oenv);
     fprintf(fp, "@TYPE xydy\n");
@@ -290,11 +288,11 @@ static void solvent_density_scan(int nd, real dmin, real dmax,
         volLayer    = volOuterEnv - volInnerEnv;
 
         densLayer    = nElecInLayer[iEnv]/volLayer;
-        densLayerErr = sqrt(nElecInLayer_sqr[iEnv]-dsqr(nElecInLayer[iEnv]))/sqrt(nframes)/volLayer;
+        densLayerErr = sqrt(nElecInLayer_sqr[iEnv]-gmx::square(nElecInLayer[iEnv]))/sqrt(nframes)/volLayer;
 
         fprintf(fp, "%10g %10g %10g\n", dmin + dd*(iEnv+0.5), densLayer, densLayerErr);
     }
-    ffclose(fp);
+    gmx_ffclose(fp);
 
     printf("\nComputed solvent density from %d frames\n", nframes);
     printf("\nWrote solvent density to %s\n", solvdensfile);
@@ -360,7 +358,7 @@ get_good_pbc_atom(rvec x[], int nsolute, int *index, int *iPBCsolute, real *rpbc
 
 static void
 env_writeFourier(t_spherical_map *qvecs, real *ft_re, real *ft_im,
-                 const char *ftfile, const char *ftabsfile, const char *intfile, output_env_t oenv)
+                 const char *ftfile, const char *ftabsfile, const char *intfile, gmx_output_env_t * & oenv)
 {
     int i, j;
     real av_re, av_im;
@@ -368,14 +366,14 @@ env_writeFourier(t_spherical_map *qvecs, real *ft_re, real *ft_im,
 
     if (ftfile)
     {
-        out = ffopen(ftfile, "w");
+        out = gmx_ffopen(ftfile, "w");
         fprintf(out, "#      %-10s %-12s %-12s   %-12s %-12s\n", "qx", "qy", "qz", "Re(FT)", "Im(FT)");
         for (i = 0; i < qvecs->n; i++)
         {
             fprintf(out, "%12g %12g %12g   %12g %12g\n", qvecs->q[i][XX], qvecs->q[i][YY], qvecs->q[i][ZZ],
                     ft_re[i], ft_im[i]);
         }
-        ffclose(out);
+        gmx_ffclose(out);
         printf("Wrote Fourier transform of envelope to %s\n", ftfile);
     }
     if (ftabsfile)
@@ -406,7 +404,7 @@ env_writeFourier(t_spherical_map *qvecs, real *ft_re, real *ft_im,
             av_re = 0.;
             for (j = qvecs->ind[i]; j < qvecs->ind[i+1]; j++)
             {
-                av_re += sqr(ft_re[j]) + sqr(ft_im[j]);
+                av_re += gmx::square(ft_re[j]) + gmx::square(ft_im[j]);
             }
             av_re /= qvecs->ind[i+1]-qvecs->ind[i];
             fprintf(out, "%12g %12g\n", qvecs->abs[i], av_re);
@@ -506,15 +504,15 @@ int gmx_genenv(int argc, char *argv[])
         };
 #define npargs asize(pa)
 
-    int             nfit, i, nat, *index_all = 0, nframes, j, ePBC, nsolute, filelen, iPBCsolute;
+    int             nfit, nat, i, *index_all = 0, nframes, j, ePBC, nsolute, filelen, iPBCsolute;
     atom_id        *index = 0, *ifit = 0;
     rvec *x = NULL, *xref = NULL, xbefore, xdiff, *xtps = 0, *xread = 0;
     t_atoms *atoms, useatoms;
     real *w_rls = NULL, t, av_re, av_im, rPBCatom, *ft_re = 0, *ft_im = 0, Rbsphere = 0, area1, l1;
     gmx_bool bTop;
     gmx_envelope_t envelope=NULL, e1=NULL, e2=NULL;
-    char buf[STRLEN], envfile_cgo[STRLEN], title[256], reftitle[256];
-    output_env_t    oenv;
+    char envfile_cgo[STRLEN], title[256], reftitle[256];
+    gmx_output_env_t    * oenv;
     const char     *envfile, *outreffile, *trxfile, *ndxfile, *allfrfile, *ftfile, *ftabsfile, *intfile;
     const char     *inenvfile1, *inenvfile2, *inreffile, *solvdensfile;
     t_trxstatus    *status;
@@ -545,8 +543,7 @@ int gmx_genenv(int argc, char *argv[])
 
 #define NFILE asize(fnm)
 
-    CopyRight(stderr, argv[0]);
-    parse_common_args(&argc, argv, PCA_BE_NICE | PCA_CAN_TIME, NFILE, fnm,
+    parse_common_args(&argc, argv, PCA_CAN_TIME, NFILE, fnm,
                       asize(pa), pa, asize(desc), desc, 0, NULL, &oenv);
 
     ndxfile    = ftp2fn_null(efNDX, NFILE, fnm);
@@ -592,7 +589,6 @@ int gmx_genenv(int argc, char *argv[])
             env_writeFourier(qvecs, ft_re, ft_im, ftfile, ftabsfile, intfile, oenv);
         }
 
-        thanx(stderr);
         return 0;
     }
 
@@ -620,7 +616,6 @@ int gmx_genenv(int argc, char *argv[])
             env_writeFourier(qvecs, ft_re, ft_im, ftfile, ftabsfile, intfile, oenv);
         }
 
-        thanx(stderr);
         return 0;
     }
 
@@ -646,11 +641,10 @@ int gmx_genenv(int argc, char *argv[])
             write_viewable_envelope( envelope, envfile, rgb, rgb_inside, alpha, bVMDout);
         }
 
-        thanx(stderr);
         return 0;
     }
 
-    bTop = read_tps_conf(ftp2fn(efTPS, NFILE, fnm), buf, &top, &ePBC, &xtps,
+    bTop = read_tps_conf(ftp2fn(efTPS, NFILE, fnm), &top, &ePBC, &xtps,
                          NULL, box, TRUE);
     atoms = &top.atoms;
 
@@ -707,7 +701,7 @@ int gmx_genenv(int argc, char *argv[])
 
     if (bPBC)
     {
-        gpbc = gmx_rmpbc_init(&top.idef, ePBC, top.atoms.nr, box);
+        gpbc = gmx_rmpbc_init(&top.idef, ePBC, top.atoms.nr);
         gmx_rmpbc(gpbc, top.atoms.nr, box, xread);
     }
 
@@ -752,11 +746,11 @@ int gmx_genenv(int argc, char *argv[])
         {
             useatoms.atomname[i] = atoms->atomname[index[i]];
             useatoms.atom[i]     = atoms->atom[index[i]];
-            useatoms.nres        = max(useatoms.nres, useatoms.atom[i].resind+1);
+            useatoms.nres        = std::max(useatoms.nres, useatoms.atom[i].resind+1);
         }
         useatoms.nr = nsolute;
 
-        out = ffopen(allfrfile, "w");
+        out = gmx_ffopen(allfrfile, "w");
     }
 
     j = 0;
@@ -827,12 +821,12 @@ int gmx_genenv(int argc, char *argv[])
 
         j++;
     }
-    while (read_next_x(oenv, status, &t, nat, xread, box) && (nfrEnvMax<0 || j<nfrEnvMax));
+    while (read_next_x(oenv, status, &t, xread, box) && (nfrEnvMax<0 || j<nfrEnvMax));
     nframes = j;
 
     if (out)
     {
-        ffclose(out);
+        gmx_ffclose(out);
     }
 
     printf("Read %d frames from %s\n", j, trxfile);
@@ -921,7 +915,7 @@ int gmx_genenv(int argc, char *argv[])
         real   env_R2;
 
         rewind_trj(status);
-        read_next_x(oenv, status, &t, nat, xread, box);
+        read_next_x(oenv, status, &t, xread, box);
 
         do
         {
@@ -950,7 +944,7 @@ int gmx_genenv(int argc, char *argv[])
                 printf("WARNING, xtc time %10g : constructed envelope does not fit into the compact box (with tolerance 0.1nm)\n", t);
                 nFrOutside++;
             }
-        } while(read_next_x(oenv, status, &t, nat, xread, box));
+        } while(read_next_x(oenv, status, &t, xread, box));
         printf("\nNumber of frames for which the envelope does not fit into the compact box: %d of %d\n", nFrOutside, nframes);
     }
 
@@ -974,8 +968,6 @@ int gmx_genenv(int argc, char *argv[])
                              nat, sigma_smooth, status, oenv, &top,
                              ndxfile, nrec, ftp2fn(efTPS, NFILE, fnm), solvdensfile, ePBC);
     }
-
-    thanx(stderr);
 
     return 0;
 }
