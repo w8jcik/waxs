@@ -35,40 +35,39 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+#include "gmxpre.h"
 
-#include <string.h>
-#include <math.h>
-#include "macros.h"
-#include "sysstuff.h"
-#include "smalloc.h"
-#include "typedefs.h"
-#include "copyrite.h"
-#include "gmxfio.h"
-#include "tpxio.h"
-#include "trnio.h"
-#include "statutil.h"
-#include "futil.h"
-#include "pdbio.h"
-#include "confio.h"
-#include "names.h"
-#include "index.h"
-#include "vec.h"
-#include "xtcio.h"
-#include "do_fit.h"
-#include "rmpbc.h"
-#include "wgms.h"
-#include "pbc.h"
-#include "xvgr.h"
-#include "xdrf.h"
-#include "gmx_ana.h"
-#include "gmx_envelope.h"
-#include "waxsmd.h"
-#include "waxsmd_utils.h"
-#include "gmx_omp.h"
-#include "mtop_util.h"
+#include <cmath>
+#include <cstring>
+
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/commandline/pargs.h"
+#include "gromacs/commandline/filenm.h"
+#include "gromacs/fileio/trxio.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/fileio/pdbio.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/topology/index.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/fileio/xtcio.h"
+#include "gromacs/math/do_fit.h"
+#include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/fileio/xvgr.h"
+#include "gromacs/fileio/xdrf.h"
+#include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/waxs/gmx_envelope.h" //SWAX stuff
+#include "gromacs/waxs/waxsmd.h" //SWAX stuff
+#include "gromacs/waxs/waxsmd_utils.h" //SWAX stuff
+#include "gromacs/utility/gmxomp.h"
+#include "gromacs/topology/mtop_util.h"
+#include "gromacs/utility/cstringutil.h"
 
 
 #define TIME_EXPLICIT 0
