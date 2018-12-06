@@ -115,6 +115,7 @@ if (NOT GMX_BUILD_MDRUN_ONLY)
     add_subdirectory(trajectoryanalysis)
     add_subdirectory(energyanalysis)
     add_subdirectory(tools)
+    add_subdirectory(waxs)
 endif()
 
 get_property(PROPERTY_SOURCES GLOBAL PROPERTY GMX_LIBGROMACS_SOURCES)
