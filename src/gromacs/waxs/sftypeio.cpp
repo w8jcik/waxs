@@ -41,26 +41,22 @@
 #include <pthread.h>
 
 #include <ctype.h>
-#include "sysstuff.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-#include "maths.h"
-#include "gmx_fatal.h"
-#include "vec.h"
-#include "macros.h"
-#include "index.h"
-#include "strdb.h"
-#include "copyrite.h"
-#include "tpxio.h"
-#include "typedefs.h"
-#include "statutil.h"
-#include "oenv.h"
-#include "gmxfio.h"
-#include "xvgr.h"
-#include "matio.h"
-#include "sftypeio.h"
-#include "waxsmd.h"
+#include <cstring>
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/math/utilities.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/topology/index.h"
+#include "gromacs/utility/strdb.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/xvgr.h"
+#include "gromacs/fileio/matio.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/waxs/waxsmd.h"
+#include "gromacs/gmxpreprocess/notset.h"
 
 /* This section contains all base structure factor operations. */
 
