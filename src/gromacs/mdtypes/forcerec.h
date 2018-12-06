@@ -46,7 +46,6 @@
 #include "gromacs/topology/idef.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
-#include "gromacs/waxs/waxsrec.h"
 
 struct ForceProviders;
 
@@ -60,6 +59,7 @@ struct t_forcetable;
 struct t_nblist;
 struct t_nblists;
 struct t_QMMMrec;
+struct t_waxsrec;
 
 #ifdef __cplusplus
 extern "C" {
@@ -379,7 +379,7 @@ struct t_forcerec {
     struct t_nblist        *QMMMlist;
 
     /* WAXS stuff */
-    t_waxsrec *waxsrec;
+    struct t_waxsrec       *waxsrec;
     
     /* Limit for printing large forces, negative is don't print */
     real print_force;
