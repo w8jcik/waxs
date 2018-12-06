@@ -126,7 +126,7 @@
 #endif /* GMX_DOUBLE */
 
 
-/* #define GMX_WAXS_NO_SIMD */
+#define GMX_WAXS_NO_SIMD
 
 /*
  * Macro names for AVX/SSE instructions
