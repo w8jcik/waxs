@@ -48,55 +48,56 @@
 #include <pthread.h>
 
 #include <ctype.h>
-#include "sysstuff.h"
-#include "typedefs.h"
-#include "statutil.h"
-#include "smalloc.h"
-#include "string2.h"
-#include "futil.h"
-#include "maths.h"
-#include "gmx_fatal.h"
-#include "vec.h"
-#include "macros.h"
-#include "index.h"
-#include "strdb.h"
-#include "copyrite.h"
-#include "gmxfio.h"
-#include "trnio.h"
-#include "tpxio.h"
-#include "oenv.h"
-#include "xvgr.h"
-#include "matio.h"
-#include "gmx_ana.h"
-#include "names.h"
-#include "waxsmd.h"
-#include "pbc.h"
-#include "rmpbc.h"
-#include "confio.h"
-#include "ns.h"
-#include "nsgrid.h"
-#include "xtcio.h"
-#include "randframes.h"
-#include "sftypeio.h"
-#include "mtop_util.h"
-#include "mdrun.h"
-#include "txtdump.h"
-#include "do_fit.h"
-#include "waxsmd_utils.h"
-#include "gmx_envelope.h"
-#include "xdrf.h"
-#include "checkpoint.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/math/utilities.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/topology/index.h"
+#include "gromacs/utility/strdb.h"
+#include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/trrio.h"
+#include "gromacs/fileio/trxio.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/xvgr.h"
+#include "gromacs/fileio/matio.h"
+#include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/waxs/waxsmd.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/mdlib/ns.h"
+#include "gromacs/mdlib/nsgrid.h"
+#include "gromacs/fileio/xtcio.h"
+//#include "randframes.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/topology/mtop_util.h"
+#include "gromacs/mdlib/mdrun.h"
+#include "gromacs/utility/txtdump.h"
+#include "gromacs/math/do_fit.h"
+#include "gromacs/waxs/waxsmd_utils.h"
+#include "gromacs/waxs/gmx_envelope.h"
+#include "gromacs/fileio/xdrf.h"
+#include "gromacs/fileio/checkpoint.h"
 #include <time.h>
-#include "string2.h"
-#include "gmx_wallcycle.h"
-#include "gmx_sort.h"
-#include "gmx_omp_nthreads.h"
-#include "gmx_omp.h"
+#include "gromacs/timing/wallcycle.h"
+#include "gromacs/utility/qsort_threadsafe.h"
+#include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/utility/gmxomp.h"
+#include "gromacs/gmxlib/network.h"
+#include "gromacs/math/gmxcomplex.h"
+#include "gromacs/gmxpreprocess/notset.h"
+#include "gromacs/waxs/gmx_envelope.h"
+#include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/math/units.h"
 
-#include"cuda_tools/scattering_amplitude_cuda.cuh" /* for calculation of scattering amplitude on GPU */
-
+#if 0
+#include "gromacs/waxs/scattering_amplitude_cuda.cuh" /* for calculation of scattering amplitude on GPU */
+#endif
 #include <sys/time.h>
-#include<string.h>
+#include <cstring>
 
 /* include the right header file */
 #ifdef GMX_DOUBLE
@@ -184,7 +185,6 @@
 // #define PRINT_A_dkI
 
 /* Portable version of ctime_r implemented in src/gmxlib/string2.c, but we do not want it declared in public installed headers */
-GMX_LIBGMX_EXPORT
 char *
 gmx_ctime_r(const time_t *clock, char *buf, int n);
 
@@ -193,7 +193,7 @@ gmx_ctime_r(const time_t *clock, char *buf, int n);
 /* Large structure that keeps all the averages specific to one scattering type (such
    as X-ray scattering, or Neutron scattering with a specific D2O concentration */
 struct waxs_datablock {
-    t_complex_d *A, *B;  /* Scattering amplitude of the present step,       size qhomenr */
+    t_complex *A, *B;  /* Scattering amplitude of the present step,       size qhomenr */
 
     /* The gradients
        grad[k] A(q) = i . q . f[k](q) . exp(iq.r[k])
@@ -210,10 +210,10 @@ struct waxs_datablock {
                                    N(n) = 1+f+f^2+...f^n, where f=exp(-deltat/tau)
                                    Use <A(n)> = N(n)^[-1] [ A(n) + f.<A(n-1)> ] */
 
-    t_complex_d  *avA ;             /* <A>, size qhomenr     */
-    t_complex_d  *avAcorr;          /* Correction added to <A> to scale I(q=0) to a given value
+    t_complex  *avA ;             /* <A>, size qhomenr     */
+    t_complex  *avAcorr;          /* Correction added to <A> to scale I(q=0) to a given value
                                        if waxsrec->bScaleI0, see mdp option waxs-scalei0 */
-    t_complex_d  *avB ;             /* <B>, size qhomenr     */
+    t_complex  *avB ;             /* <B>, size qhomenr     */
     double       *avAsq ;           /* <|A|^2>, size qhomenr */
     double       *avBsq ;           /* <|B|^2>, size qhomenr */
     double       *re_avBbar_AmB;    /* Re < B* . (A-B) >   */
@@ -221,12 +221,12 @@ struct waxs_datablock {
     double       *DerrSolvDens;     /* Uncertainty of D(q) due to uncertainty in solvent density */
 
     double *Dglobal;          /* D        of size qvecs->n - for Master for output only */
-    t_complex_d *avAglobal;   /* avA      of size qvecs->n - for Master for output only */
+    t_complex *avAglobal;   /* avA      of size qvecs->n - for Master for output only */
     double *avAsqglobal;      /* avAsq    of size qvecs->n - for Master for output only */
     double *avA4global;       /* avA4     of size qvecs->n - for Master for output only */
     double *av_ReA_2global;   /* av_ReA_2 of size qvecs->n - for Master for output only */
     double *av_ImA_2global;   /* av_ImA_2 of size qvecs->n - for Master for output only */
-    t_complex_d *avBglobal;   /* avB      of size qvecs->n - for Master for output only */
+    t_complex *avBglobal;   /* avB      of size qvecs->n - for Master for output only */
     double *avBsqglobal;      /* avBsq    of size qvecs->n - for Master for output only */
     double *avB4global;       /* avB4     of size qvecs->n - for Master for output only */
     double *av_ReB_2global;   /* av_ReB_2 of size qvecs->n - for Master for output only */
@@ -251,7 +251,7 @@ struct waxs_datablock {
     dvec *Orientational_Av;
 
     /* Byte blocks and offsets for communications. */
-    gmx_large_int_t nByteAlloc; /* Memory allocated to store averages (on this node) */
+    gmx_int64_t nByteAlloc; /* Memory allocated to store averages (on this node) */
 
     int *masterlist_qhomenr;    /* qstart and qhomenr kept on the Master node. Required for checkpointing */
     int *masterlist_qstart;
@@ -382,9 +382,10 @@ waxsDoMPIComm_qavgs_low(t_waxsrecType *wt, t_commrec *cr, void *loc_buf, void *g
     int loc_cnts;                    //Size of each package on outer nodes.
     int *glb_cnts = NULL;            //Master array: expected number of incoming bytes from each node.
     int *glb_offs = NULL;            //Master array: offsets to put into destination.
+    char * temp_loc_buf = nullptr;
     gmx_bool bLocBufEmpty = FALSE;
 
-    gmx_large_int_t test;
+    gmx_int64_t test;
     int i;
     int nnodes = cr->nnodes - cr->npmenodes;
     int limit  = 2147483647; // 2 Gigs, largest possible int?
@@ -412,7 +413,8 @@ waxsDoMPIComm_qavgs_low(t_waxsrecType *wt, t_commrec *cr, void *loc_buf, void *g
         /* If no q-vectors are stored on a node, loc_buf is zero, leadig to an MPI error below.
            Therefore, in this case, allocate a small arrray and clear it below */
         bLocBufEmpty = TRUE;
-        snew(loc_buf, 8);
+        snew(temp_loc_buf, 8);
+        loc_buf = static_cast<void *>(temp_loc_buf);
     }
 
     /* Construct count arrays on master.
@@ -511,7 +513,7 @@ waxsDoMPIComm_qavgs_low(t_waxsrecType *wt, t_commrec *cr, void *loc_buf, void *g
     }
     if (bLocBufEmpty)
     {
-        sfree(loc_buf);
+        sfree(temp_loc_buf);
     }
 }
 
@@ -636,7 +638,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
         {
             sprintf(buf, "acf_step_%d.dat", wr->waxsStep);
             /* avoid use of oenv here - so we don't have to pass it across the functions */
-            fp = ffopen(buf, "w");
+            fp = gmx_ffopen(buf, "w");
             fprintf(fp, "@    title \"ACF of D(q) vs. angle\"\n"
                     "@    xaxis  label \"\xf\f{} [Rad]\"\n"
                     "@    yaxis  label \"ACF\"\n@type xy\n");
@@ -718,7 +720,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
                     Dav  /= thisJ;
                     for (k = 0; k < thisJ; k++)
                     {
-                        Dvar += dsqr(Dglob[k]-Dav);
+                        Dvar += gmx::square(Dglob[k]-Dav);
                     }
                     Dvar /= thisJ;
                     // printf("Dav  = %g  %g\n", Dav, Dvar);
@@ -767,7 +769,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
                     phi_exp1 = phi0 + dphi * (invexp-acf[iphi-1])/(acf[iphi]-acf[iphi-1]);
 
                     /* Assume that acf = exp(-phi/tau) * 0.5*(3cos^2(x) - 1) */
-                    rtmp = 2*invexp / (3*sqr(cos(phi_exp1))-1);
+                    rtmp = 2*invexp / (3*gmx::square(cos(phi_exp1))-1);
                     tau_phi = (rtmp > 1e-20) ? -phi_exp1/log(rtmp) : 50.;
 
                     /* - autocorrelation area =
@@ -776,7 +778,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
                        - muliply by 2 because there is additional correlation on the opposite
                        side of the sphere
                      */
-                    corr_area = 2 * 2*M_PI * tau_phi*(tau_phi-exp(-M_PI/(2*tau_phi)))/(1+sqr(tau_phi));
+                    corr_area = 2 * 2*M_PI * tau_phi*(tau_phi-exp(-M_PI/(2*tau_phi)))/(1+gmx::square(tau_phi));
                     if (corr_area > 4*M_PI)
                     {
                         corr_area = 4*M_PI;
@@ -811,7 +813,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
 
         if (fp && MASTER(cr))
         {
-            ffclose(fp);
+            gmx_ffclose(fp);
             printf("Wrote autocorrelation functions of D(q) to %s for each |q|\n", buf);
         }
 
@@ -838,7 +840,7 @@ waxsEstimateNumberIndepPoints(t_waxsrec *wr, t_commrec *cr, gmx_bool bWriteACF2F
 }
 
 
-static void init_waxs_output(t_waxsrec *wr, const char *fnOut, output_env_t oenv)
+static void init_waxs_output(t_waxsrec *wr, const char *fnOut, gmx_output_env_t * oenv)
 {
     int len, i, t;
     char *base, typeStr[STRLEN], title[STRLEN];
@@ -864,7 +866,7 @@ static void init_waxs_output(t_waxsrec *wr, const char *fnOut, output_env_t oenv
     sprintf(wr->wo->fnLog,     "%s.log",         base);
     sprintf(wr->wo->fnDensity, "%s_density.dat", base);
 
-    wr->wo->fpLog = ffopen(wr->wo->fnLog, "w");
+    wr->wo->fpLog = gmx_ffopen(wr->wo->fnLog, "w");
     if (wr->bRotFit )
     {
         fprintf(wr->wo->fpLog,"NB: WAXS-rotational fit has been turned on.\n");
@@ -962,7 +964,7 @@ static void init_waxs_output(t_waxsrec *wr, const char *fnOut, output_env_t oenv
 
         if (wr->bPrintForces)
         {
-            wr->wo->xfout[t]     = open_trn(wr->wo->fnForces[t], "w");
+            wr->wo->xfout[t]     = gmx_trr_open(wr->wo->fnForces[t], "w");
             fprintf(wr->wo->fpLog,"NB: Printing coordinates and forces at each waxs-step (scattering type %d, %s).\n", t, wr->wt[t].saxssansStr);
         }
         if (WAXS_ENSEMBLE(wr))
@@ -1021,7 +1023,7 @@ write_averages(t_waxsrecType *wt, const char *fnAvgA, const char *fnAvgB)
     FILE *fp;
 
     /* Write Average Scattering amplitude A(vec{q}) */
-    fp = ffopen(fnAvgA, "w");
+    fp = gmx_ffopen(fnAvgA, "w");
     fprintf(fp,"# %10s = %d\n", "nabs",wt->qvecs->nabs);
     fprintf(fp,"# %10s %12s %12s  %12s %12s %12s %12s %12s %12s\n", "qx", "qy", "qz",
             "< Re A >", "< Im A >", "< |A|^2 >", "< |A|^4 >", "< (Re A)^2 >", "< (Im A)^2 >");
@@ -1041,11 +1043,11 @@ write_averages(t_waxsrecType *wt, const char *fnAvgA, const char *fnAvgB)
         fprintf(fp,"\n\n");
     }
     printf("Wrote all averages of scattering amplitudes of System A to %s\n", fnAvgA);
-    ffclose(fp);
+    gmx_ffclose(fp);
 
     if (fnAvgB)
     {
-        fp = ffopen(fnAvgB, "w");
+        fp = gmx_ffopen(fnAvgB, "w");
         fprintf(fp,"# %10s = %d\n", "nabs",wt->qvecs->nabs);
         fprintf(fp,"# %8s %10s %10s  %10s %10s %10s %10s %10s %10s\n", "qx", "qy", "qz",
                 "< Re B >", "< Im B >", "< |B|^2 >", "< |B|^4 >", "< (Re B)^2 >", "< (Im B)^2 >");
@@ -1065,12 +1067,12 @@ write_averages(t_waxsrecType *wt, const char *fnAvgA, const char *fnAvgB)
             fprintf(fp,"\n\n");
         }
         printf("Wrote all averages of scattering amplitudes of System B to %s\n", fnAvgB);
-        ffclose(fp);
+        gmx_ffclose(fp);
     }
 }
 
 static void
-write_stddevs(t_waxsrec *wr, gmx_large_int_t step, int t)
+write_stddevs(t_waxsrec *wr, gmx_int64_t step, int t)
 {
     int           i;
     t_waxsrecType *wt;
@@ -1136,7 +1138,7 @@ write_intensity(FILE *fp, t_waxsrec *wr, int type)
    With bVariance == TRUE, take sqrt of error before writing the error column.
    fact ( = 1/sqrt(N) ) allows to switch from stddev to stddev/sqrt(N)
  */
-void print_Ivsq(FILE *fp, t_waxsrecType *wt, double *I, double *Ierror, gmx_bool bVariance, double fact, char *type)
+void print_Ivsq(FILE *fp, t_waxsrecType *wt, double *I, double *Ierror, gmx_bool bVariance, double fact, char const *type)
 {
     int i;
     real dq = (wt->nq > 1) ? (wt->maxq - wt->minq)/(wt->nq - 1) : 0.0;
@@ -1163,7 +1165,7 @@ void print_Ivsq(FILE *fp, t_waxsrecType *wt, double *I, double *Ierror, gmx_bool
 }
 
 void
-done_waxs_output(t_waxsrec *wr, output_env_t oenv)
+done_waxs_output(t_waxsrec *wr, gmx_output_env_t * oenv)
 {
     int              i, j, s, t;
     real             dq, compwater, r2;
@@ -1183,14 +1185,14 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
         wd = wt->wd;
         dq = (wt->nq > 1) ? (wt->maxq - wt->minq)/(wt->nq - 1) : 0.0 ;
 
-        ffclose(wo->fpSpectra[t]);
+        gmx_ffclose(wo->fpSpectra[t]);
         if (wo->fpStddevs[t])
         {
-            ffclose(wo->fpStddevs[t]);
+            gmx_ffclose(wo->fpStddevs[t]);
         }
         if (wo->fpSpecEns[t])
         {
-            ffclose(wo->fpSpecEns[t]);
+            gmx_ffclose(wo->fpSpecEns[t]);
         }
 
         if (wr->bCalcPot)
@@ -1204,7 +1206,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
             for (i=0; i < wt->nq; i++)
             {
                 /* Get standard deviation */
-                stddev = wd->vAver2[i] - sqr(wd->vAver[i]);
+                stddev = wd->vAver2[i] - gmx::square(wd->vAver[i]);
                 stddev = ( (stddev>0.) ? sqrt(stddev) : 0.);
                 fprintf(wo->fpLog,"%8g  %10g  %10g\n", wt->minq + i*dq, wd->vAver[i], stddev);
             }
@@ -1245,12 +1247,12 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
                     fprintf(stderr, "Wrote maximum-likelihood-scaled target intensity to %s\n", wo->fnFinal[t]);
                 }
             }
-            ffclose(fp);
+            gmx_ffclose(fp);
             break;
         case ewaxsanisoYES:
-            fp = ffopen(wo->fnFinal[t], "w");
+            fp = gmx_ffopen(wo->fnFinal[t], "w");
             write_intensity(fp, wr, t);
-            ffclose(fp);
+            gmx_ffclose(fp);
             break;
         default:
             gmx_fatal(FARGS, "This anisotropy (%d) is not supported (in done_waxs_output)\n", wr->ewaxsaniso);
@@ -1258,7 +1260,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
         fp = NULL;
 
         /* Write D(vec{q}), see eq. 10 of Chen/Hub, Biophys J, 2014 */
-        fp = ffopen(wo->fnD[t], "w");
+        fp = gmx_ffopen(wo->fnD[t], "w");
         fprintf(fp, "# %8s %10s %10s  %10s\n", "qx", "qy", "qz", "Intensity(vec{q})");
         for (i = 0; i < wt->qvecs->nabs; i++)
         {
@@ -1271,7 +1273,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
             fprintf(fp, "\n\n");
         }
         printf("Wrote all scattering intensities D(q) to %s\n", wo->fnD[t]);
-        ffclose(fp);
+        gmx_ffclose(fp);
 
         /* Write averages of A and B into files */
         write_averages(&wr->wt[t], wo->fnAvgA[t], wr->bVacuum ? NULL : wo->fnAvgB[t]);
@@ -1355,7 +1357,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
                 print_Ivsq(fp, wt, wd->avAqabs_re, NULL, TRUE, 1, "@type xy");
                 print_Ivsq(fp, wt, wd->avAqabs_im, NULL, TRUE, 1, "@type xy");
             }
-            ffclose(fp);
+            gmx_ffclose(fp);
             fp = NULL;
 
             if (wd->Nindep)
@@ -1363,7 +1365,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
                 fp = xvgropen(wo->fnNindep[t], "# of independent I(q)",
                         "q [nm\\S-1\\N]", "# independent", oenv);
                 print_Ivsq(fp, wt, wd->Nindep, NULL, TRUE, 1., "@type xy");
-                ffclose(fp);
+                gmx_ffclose(fp);
             }
 
             break;
@@ -1375,12 +1377,12 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
 
         if (wo->fpPot[t])
         {
-            ffclose(wo->fpPot[t]);
+            gmx_ffclose(wo->fpPot[t]);
         }
 
         if (wr->bPrintForces)
         {
-            close_trn(wo->xfout[t]);
+            gmx_trr_close(wo->xfout[t]);
         }
     }
 
@@ -1391,7 +1393,7 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
     if (wo->fpExpRMSD)
     {
         fprintf(wo->fpExpRMSD, "&\n");
-        ffclose(wo->fpExpRMSD);
+        gmx_ffclose(wo->fpExpRMSD);
     }
 
     /* Write computig time statistics to log */
@@ -1404,13 +1406,13 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
 
     print2log(wo->fpLog, "Average nr of excluded volume atoms", "%g", wr->nAtomsExwaterAver);
     print2log(wo->fpLog, "\nAverage nr of electrons in A",      "%g", wr->nElecAvA);
-    print2log(wo->fpLog, "Stddev  nr of electrons in A",        "%g", sqrt(wr->nElecAv2A-sqr(wr->nElecAvA)));
+    print2log(wo->fpLog, "Stddev  nr of electrons in A",        "%g", sqrt(wr->nElecAv2A-gmx::square(wr->nElecAvA)));
     print2log(wo->fpLog, "Stddev/sqrt(N) nr of electrons in A", "%g",
-            sqrt(wr->nElecAv2A-sqr(wr->nElecAvA))/sqrt(wr->waxsStep));
+            sqrt(wr->nElecAv2A-gmx::square(wr->nElecAvA))/sqrt(wr->waxsStep));
     print2log(wo->fpLog, "Average nr^2  of electrons in A", "%g", wr->nElecAv2A);
-    print2log(wo->fpLog, "Stddev (nr^2) of electrons in A", "%g", sqrt(wr->nElecAv4A-sqr(wr->nElecAv2A)));
+    print2log(wo->fpLog, "Stddev (nr^2) of electrons in A", "%g", sqrt(wr->nElecAv4A-gmx::square(wr->nElecAv2A)));
     print2log(wo->fpLog, "Stddev/sqrt(N) (nr^2) of electrons in A", "%g",
-            sqrt(wr->nElecAv4A-sqr(wr->nElecAv2A))/sqrt(wr->waxsStep));
+            sqrt(wr->nElecAv4A-gmx::square(wr->nElecAv2A))/sqrt(wr->waxsStep));
 
     if (! wr->bVacuum)
     {
@@ -1418,33 +1420,33 @@ done_waxs_output(t_waxsrec *wr, output_env_t oenv)
         print2log(wo->fpLog,"Approximate density of solute (e/nm3)",  "%g", wr->nElecProtA/wr->soluteVolAv);
         print2log(wo->fpLog,"Volume of envelope (nm3)",               "%g", droplet_volume(wr));
         print2log(wo->fpLog,"\nAverage nr of electrons in B",         "%g", wr->nElecAvB);
-        print2log(wo->fpLog,"Stddev  nr of electrons in B",           "%g", sqrt(wr->nElecAv2B-sqr(wr->nElecAvB)));
+        print2log(wo->fpLog,"Stddev  nr of electrons in B",           "%g", sqrt(wr->nElecAv2B-gmx::square(wr->nElecAvB)));
         print2log(wo->fpLog,"Stddev/sqrt(N) nr of electrons in B",    "%g",
-                sqrt(wr->nElecAv2B-sqr(wr->nElecAvB))/sqrt(wr->waxsStep));
+                sqrt(wr->nElecAv2B-gmx::square(wr->nElecAvB))/sqrt(wr->waxsStep));
         print2log(wo->fpLog,"Average  nr^2  of electrons in B",        "%g", wr->nElecAv2B);
-        print2log(wo->fpLog,"Stddev  (nr^2) of electrons in B",        "%g", sqrt(wr->nElecAv4B-sqr(wr->nElecAv2B)));
+        print2log(wo->fpLog,"Stddev  (nr^2) of electrons in B",        "%g", sqrt(wr->nElecAv4B-gmx::square(wr->nElecAv2B)));
         print2log(wo->fpLog,"Stddev/sqrt(N) (nr^2) of electrons in B", "%g",
-                sqrt(wr->nElecAv4B-sqr(wr->nElecAv2B))/sqrt(wr->waxsStep));
+                sqrt(wr->nElecAv4B-gmx::square(wr->nElecAv2B))/sqrt(wr->waxsStep));
     }
 
     print2log(wo->fpLog, "\nAverage electron density in A NOT protein+solvation layer (e/nm^3)", "%g", wr->solElecDensAv);
     print2log(wo->fpLog, "Stddev  electron density in A NOT protein+solvation layer", "%g",
-            sqrt(wr->solElecDensAv2-sqr(wr->solElecDensAv)));
+            sqrt(wr->solElecDensAv2-gmx::square(wr->solElecDensAv)));
     print2log(wo->fpLog, "Stddev/sqrt(N) electron density in A NOT protein+solvation layer", "%g",
-            sqrt(wr->solElecDensAv2-sqr(wr->solElecDensAv))/sqrt(wr->waxsStep));
+            sqrt(wr->solElecDensAv2-gmx::square(wr->solElecDensAv))/sqrt(wr->waxsStep));
 
     compwater = 18.01528/6.002214129;
     print2log(wo->fpLog,"This corresponds to a pure H2O density of (kg/m^3)", "%g", compwater*wr->solElecDensAv);
     print2log(wo->fpLog,"Stddev     pure H2O density", "%g",
-            sqrt(wr->solElecDensAv2*compwater*compwater-sqr(wr->solElecDensAv*compwater)));
+            sqrt(wr->solElecDensAv2*compwater*compwater-gmx::square(wr->solElecDensAv*compwater)));
     print2log(wo->fpLog,"Stddev/sqrt(N)  pure H2O density", "%g",
-            sqrt(wr->solElecDensAv2*compwater*compwater-sqr(wr->solElecDensAv*compwater))/sqrt(wr->waxsStep));
+            sqrt(wr->solElecDensAv2*compwater*compwater-gmx::square(wr->solElecDensAv*compwater))/sqrt(wr->waxsStep));
 
     print2log(wo->fpLog, "\nAverage (electron density)^2 in A NOT protein+solvation layer", "%g", wr->solElecDensAv2);
     print2log(wo->fpLog, "Stddev  (electron density)^2 in A NOT protein+solvation layer", "%g",
-            sqrt(wr->solElecDensAv4-sqr(wr->solElecDensAv2)));
+            sqrt(wr->solElecDensAv4-gmx::square(wr->solElecDensAv2)));
     print2log(wo->fpLog, "Stddev/sqrt(N) (electron density)^2 in A NOT protein+solvation layer", "%g",
-            sqrt(wr->solElecDensAv4-sqr(wr->solElecDensAv2))/sqrt(wr->waxsStep));
+            sqrt(wr->solElecDensAv4-gmx::square(wr->solElecDensAv2))/sqrt(wr->waxsStep));
 
     print2log(wo->fpLog, "\nElectron density in the bulk of A [e/nm3]", "%g", wr->solElecDensAv);
     if (! wr->bVacuum)
@@ -1542,7 +1544,7 @@ done_waxs_solvent(t_waxs_solvent ws)
 {
     int i;
     /* Should do something about that topology. */
-    done_mtop(ws->mtop, TRUE );
+    done_mtop(ws->mtop);
     sfree(ws->box);
     for(i = 0; i < ws->nframes; i++)
     {
@@ -1554,7 +1556,7 @@ done_waxs_solvent(t_waxs_solvent ws)
 
 /* NB: Only MASTER reads the waxs solvent. */
 static void
-read_waxs_solvent(output_env_t oenv, t_waxs_solvent ws, const char *fntps, const char *fnxtc,
+read_waxs_solvent(gmx_output_env_t * oenv, t_waxs_solvent ws, const char *fntps, const char *fnxtc,
                   gmx_bool bVerbose, t_waxsrec *wr)
 {
     rvec *xtop;
@@ -1585,7 +1587,7 @@ read_waxs_solvent(output_env_t oenv, t_waxs_solvent ws, const char *fntps, const
     /* read solvent topology */
     snew(ws->mtop,   1);
     fprintf(stderr, "\n");
-    read_tpx_state(fntps, &ir, &dummystate, NULL, ws->mtop);
+    read_tpx_state(fntps, &ir, &dummystate, ws->mtop);
 
     ngrps_solvent = get_actual_ngroups( &(ws->mtop->groups), egcWAXSSolvent );
 
@@ -1760,7 +1762,8 @@ updateSoluteContrast(t_waxsrec *wr, t_commrec *cr)
 static void
 pure_solvent_scattering(t_waxsrec *wr, t_commrec *cr, const char *fnxtcSolv, gmx_mtop_t *mtop)
 {
-    char           *fn, path[10000], *base;
+    const char           *fn, *base;
+    char            path[1000];
     double         *intensitySum = NULL;
     t_waxs_solvent  ws = wr->waxs_solv;
     t_waxsrecType  *wt;
@@ -1899,11 +1902,11 @@ get_solvent_density(t_waxsrec *wr)
     {
         tmp     = 1./det(ws->box[i]);
         inv_v  += tmp;
-        inv_v2 += sqr(tmp);
+        inv_v2 += gmx::square(tmp);
     }
     inv_v      /= ws->nframes;
     inv_v2     /= ws->nframes;
-    inv_vstddev = inv_v2 - sqr(inv_v);
+    inv_vstddev = inv_v2 - gmx::square(inv_v);
 
     for (i = 0; i < wr->nindB_sol; i++)
     {
@@ -1925,7 +1928,7 @@ get_solvent_density(t_waxsrec *wr)
            "\tav. volume [nm3]    = %g +- %g\n"
            "\tav. density [e/nm3] = %g\n\n",
            ws->nframes,
-           wr->nindB_sol, nelec_sum, 1./inv_v, inv_vstddev/sqr(inv_v), ws->avDensity);
+           wr->nindB_sol, nelec_sum, 1./inv_v, inv_vstddev/gmx::square(inv_v), ws->avDensity);
 
     if (ws->avDensity > 334*1.1 || ws->avDensity < 334*0.9)
     {
@@ -1981,7 +1984,7 @@ get_solvent_density(t_waxsrec *wr)
 
         /* Store for computing variance of nelec */
         nelec_sum  += nelec_frame;
-        nelec2_sum += dsqr(nelec_frame);
+        nelec2_sum += gmx::square(nelec_frame);
         nat_sum    += nat_frame;
     }
     printf("\n\n");
@@ -1989,10 +1992,10 @@ get_solvent_density(t_waxsrec *wr)
     nelec_sum            /= ws->nframes;
     nelec2_sum           /= ws->nframes;
     nat_sum              /= ws->nframes;
-    var_nelec             = nelec2_sum - dsqr(nelec_sum);
+    var_nelec             = nelec2_sum - gmx::square(nelec_sum);
     vDroplet              = droplet_volume(wr);
     ws->avDropletDensity  = nelec_sum/vDroplet;
-    varDropletDensity     = var_nelec/sqr(vDroplet);
+    varDropletDensity     = var_nelec/gmx::square(vDroplet);
     if (ws->avDropletDensity > 334*1.1 || ws->avDropletDensity < 334*0.9)
     {
         fprintf(stderr, "\n\nWARNING, you have a solvent density of %g e/nm3 (for water, this should"
@@ -2125,7 +2128,7 @@ read_intensity_and_interpolate(const char *fn, real minq, real maxq, int nq, gmx
             Ierr[i]   = Isigleft + (q-left) * slopeIsig;
             if (bReturnVariance)
             {
-                Ierr[i] = dsqr(Ierr[i]);
+                Ierr[i] = gmx::square(Ierr[i]);
             }
             if (Ierr[i] < 1e-20)
             {
@@ -2523,7 +2526,7 @@ get_solvation_shell(rvec x[], rvec xex[], t_waxsrec *wr,
                 mindist, wr->solv_warn_lay, wr->indA_prot[iMindist],
                 bMinDistToOuter ? "outer" : "inner", mindist);
     }
-    envMaxR2 = sqr(gmx_envelope_maxR(wr->wt[0].envelope));
+    envMaxR2 = gmx::square(gmx_envelope_maxR(wr->wt[0].envelope));
 
     /* Construct solvation layer around solute */
     wr->isizeA = wr->nindA_prot;
@@ -2764,7 +2767,7 @@ t_spherical_map *gen_qvecs_map(real minq, real maxq, int nqabs, int J,
             else
             {
                 /* automatic selection of J = MAX(Jmin , alpha*(D*J)^2 */
-                thisJ = round(Jalpha*sqr(qabs*D));
+                thisJ = round(Jalpha*gmx::square(qabs*D));
                 if (thisJ < Jmin)
                 {
                     thisJ = Jmin;
@@ -2802,7 +2805,7 @@ t_spherical_map *gen_qvecs_map(real minq, real maxq, int nqabs, int J,
                    We assume the x-ray beam comes along the x-axis, so there is not point
                    to compute the scattering amplitude along x. */
                 phi = 2.0*M_PI*j/thisJ;
-                if (qabs*2.0 > sqr(qbeam))
+                if (qabs*2.0 > gmx::square(qbeam))
                 {
                     gmx_fatal(FARGS,"qmax larger then two times qbeam. Geometrically not possible. Reduce qmax.\n");
                 }
@@ -3077,10 +3080,10 @@ scaleI0_getAddedDensity(t_waxsrec *wr, t_commrec *cr)
                 gmx_fatal(FARGS, "On this node, have qstart = 0, but norm2(q[0]) = %g\n", norm2(wt->qvecs->q[0]));
             }
 
-            Inow          = sqr(wd->avA[0].re - wd->avB[0].re) + (wd->avAsq[0] - dsqr(wd->avA[0].re))
-                                                                                                        - (wd->avBsq[0] - dsqr(wd->avB[0].re));
+            Inow          = gmx::square(wd->avA[0].re - wd->avB[0].re) + (wd->avAsq[0] - gmx::square(wd->avA[0].re))
+                                                                                                        - (wd->avBsq[0] - gmx::square(wd->avB[0].re));
             deltaI        = wt->targetI0 - Inow;
-            deltaAq0      = -(wd->avA[0].re - wd->avB[0].re) + sqrt( dsqr(wd->avA[0].re - wd->avB[0].re) + deltaI);
+            deltaAq0      = -(wd->avA[0].re - wd->avB[0].re) + sqrt( gmx::square(wd->avA[0].re - wd->avB[0].re) + deltaI);
             if (WAXS_SCALEI0_ADD_TO_SOLVENT_OF_A)
             {
                 NelecEnvelope = gmx_envelope_solvent_density_getNelecTotal(wt->envelope);
@@ -3283,7 +3286,7 @@ fix_solvent_density(t_waxsrec *wr, t_commrec *cr, int t)
 #define STR(x)   #x
 #define SHOW_DEFINE(x) fprintf(stderr, "%s=%s\n", #x, STR(x))
 static void
-compute_scattering_amplitude (t_complex_d *scatt_amplitude, rvec *atomEnvelope_coord,
+compute_scattering_amplitude (t_complex *scatt_amplitude, rvec *atomEnvelope_coord,
                                      int *atomEnvelope_type, int isize, int nprot,
                                      rvec *q, int *iTable, int qhomenr, real **aff_table, real *nsl_table,
                                      t_complex *grad_amplitude_bar,
@@ -3311,7 +3314,7 @@ compute_scattering_amplitude (t_complex_d *scatt_amplitude, rvec *atomEnvelope_c
 
     for (i = 0; i < qhomenr; i++)
     {
-        scatt_amplitude[i] = cnul_d;
+        scatt_amplitude[i] = cnul;
     }
 
     real       *p_aff, *p_qdotx,*re,*im,tmp;
@@ -3465,7 +3468,7 @@ extern double md_CMSF (t_cromer_mann cmsf, real lambda, real sin_theta,
      */
 
     /* k2 is in units A^-2 (according to parameters b[i]), whereas lambda in nm */
-    k2 = (sqr (sin_theta) / sqr (10.0 * lambda));
+    k2 = (gmx::square (sin_theta) / gmx::square (10.0 * lambda));
     tmp = cmsf.c;
     for (i = 0; (i < 4); i++)
     {
@@ -3479,7 +3482,7 @@ extern double md_CMSF (t_cromer_mann cmsf, real lambda, real sin_theta,
 
     if ( alpha != 0 )
     {
-        Q2 = sqr(4*M_PI*sin_theta/lambda);
+        Q2 = gmx::square(4*M_PI*sin_theta/lambda);
         tmp *= ( 1 +alpha*exp(-Q2/(2*delta*delta)) );
     }
     return tmp;
@@ -4011,9 +4014,9 @@ static void
 alloc_waxs_datablock(t_commrec *cr, t_waxsrec *wr, int nindA_prot, int t)
 {
     int qhomenr,i, nIvalues = -1, nqvalues = -1, nabs;
-    gmx_large_int_t nByte = 0;
-    gmx_large_int_t nByteForce = 0;
-    gmx_large_int_t nByteInten = 0;
+    gmx_int64_t nByte = 0;
+    gmx_int64_t nByteForce = 0;
+    gmx_int64_t nByteInten = 0;
     t_waxsrecType *wt;
     t_waxs_datablock wd;
 
@@ -4110,7 +4113,7 @@ alloc_waxs_datablock(t_commrec *cr, t_waxsrec *wr, int nindA_prot, int t)
 
     for (i = 0; i < qhomenr; i++)
     {
-        wd->avA  [i]    = cnul_d;
+        wd->avA  [i]    = cnul;
         wd->avAsq[i]    = 0.;
         wd->avA4 [i]    = 0.;
         wd->av_ReA_2[i] = 0.;
@@ -4153,7 +4156,7 @@ alloc_waxs_datablock(t_commrec *cr, t_waxsrec *wr, int nindA_prot, int t)
 
         for (i = 0; i < qhomenr; i++)
         {
-            wd->avB     [i]      = cnul_d;
+            wd->avB     [i]      = cnul;
             wd->avBsq   [i]      = 0;
             wd->avB4    [i]      = 0.;
             wd->av_ReB_2[i]      = 0.;
@@ -4304,19 +4307,19 @@ void waxs_alloc_globalavs(t_waxsrec *wr)
         nq = wr->wt[t].qvecs->n;
         wd = wr->wt[t].wd;
 
-        wd->Dglobal        = calloc(nq, sizeof(*(wd->Dglobal)));
-        wd->avAglobal      = calloc(nq, sizeof(*(wd->avAglobal)));
-        wd->avAsqglobal    = calloc(nq, sizeof(*(wd->avAsqglobal)));
-        wd->avA4global     = calloc(nq, sizeof(*(wd->avA4global)));
-        wd->av_ReA_2global = calloc(nq, sizeof(*(wd->av_ReA_2global)));
-        wd->av_ImA_2global = calloc(nq, sizeof(*(wd->av_ImA_2global)));
+        wd->Dglobal        = (double *) calloc(nq, sizeof(*(wd->Dglobal)));
+        wd->avAglobal      = (t_complex *) calloc(nq, sizeof(*(wd->avAglobal)));
+        wd->avAsqglobal    = (double *) calloc(nq, sizeof(*(wd->avAsqglobal)));
+        wd->avA4global     = (double *) calloc(nq, sizeof(*(wd->avA4global)));
+        wd->av_ReA_2global = (double *) calloc(nq, sizeof(*(wd->av_ReA_2global)));
+        wd->av_ImA_2global = (double *) calloc(nq, sizeof(*(wd->av_ImA_2global)));
         if (!wr->bVacuum)
         {
-            wd->avBglobal      = calloc(nq, sizeof(*(wd->avBglobal)));
-            wd->avBsqglobal    = calloc(nq, sizeof(*(wd->avBsqglobal)));
-            wd->avB4global     = calloc(nq, sizeof(*(wd->avB4global)));
-            wd->av_ReB_2global = calloc(nq, sizeof(*(wd->av_ReB_2global)));
-            wd->av_ImB_2global = calloc(nq, sizeof(*(wd->av_ImB_2global)));
+            wd->avBglobal      = (t_complex *) calloc(nq, sizeof(*(wd->avBglobal)));
+            wd->avBsqglobal    = (double *) calloc(nq, sizeof(*(wd->avBsqglobal)));
+            wd->avB4global     = (double *) calloc(nq, sizeof(*(wd->avB4global)));
+            wd->av_ReB_2global = (double *) calloc(nq, sizeof(*(wd->av_ReB_2global)));
+            wd->av_ImB_2global = (double *) calloc(nq, sizeof(*(wd->av_ImB_2global)));
         }
     }
 }
@@ -4330,19 +4333,19 @@ void waxs_free_globalavs(t_waxsrec *wr)
     {
         wd = wr->wt[t].wd;
 
-        free(wd->Dglobal);         wd->Dglobal        = NULL;
-        free(wd->avAglobal);       wd->avAglobal      = NULL;
-        free(wd->avAsqglobal);     wd->avAsqglobal    = NULL;
-        free(wd->avA4global);      wd->avA4global     = NULL;
-        free(wd->av_ReA_2global);  wd->av_ReA_2global = NULL;
-        free(wd->av_ImA_2global);  wd->av_ImA_2global = NULL;
+        sfree(wd->Dglobal);
+        sfree(wd->avAglobal);
+        sfree(wd->avAsqglobal);
+        sfree(wd->avA4global);;
+        sfree(wd->av_ReA_2global);
+        sfree(wd->av_ImA_2global);
         if (!wr->bVacuum)
         {
-            free(wd->avBglobal);      wd->avBglobal      = NULL;
-            free(wd->avBsqglobal);    wd->avBsqglobal    = NULL;
-            free(wd->avB4global);     wd->avB4global     = NULL;
-            free(wd->av_ReB_2global); wd->av_ReB_2global = NULL;
-            free(wd->av_ImB_2global); wd->av_ImB_2global = NULL;
+            sfree(wd->avBglobal);
+            sfree(wd->avBsqglobal);
+            sfree(wd->avB4global);;
+            sfree(wd->av_ReB_2global);
+            sfree(wd->av_ImB_2global);
         }
     }
 }
@@ -4545,7 +4548,7 @@ void
 init_waxs_md( t_waxsrec *wr,
               t_commrec *cr, t_inputrec *ir,
               gmx_mtop_t *top_global,
-              const output_env_t oenv, double t0,
+              gmx_output_env_t * oenv, double t0,
               const char *fntpsSolv, const char *fnxtcSolv,const char *fnOut,
               const char *fnScatt,
               t_state *state_local, gmx_bool bRerunMD, gmx_bool bWaterOptSet,
@@ -4714,7 +4717,7 @@ init_waxs_md( t_waxsrec *wr,
 
     if (wr->nfrsolvent > 0)
     {
-#ifdef GMX_GPU
+#if 0
         /* Unit FT is only calculated once. It is therefore also only copied once to GPU */
         if (wr->bUseGPU == TRUE)
         {
@@ -5030,7 +5033,7 @@ init_waxs_md( t_waxsrec *wr,
 
     if (ir->cutoff_scheme == ecutsVERLET)
     {
-#ifdef GMX_GPU
+#if 0
         /* Here all data is copied to GPU that will remain constantly there. It initializes the GPU for all scattering types. */
         if (wr->bUseGPU)
         {
@@ -5065,34 +5068,34 @@ void done_waxs_md(t_waxsrec *wr)
         done_waxs_eavrmsd(wr->wrmsd);
 }
 
-/* Update cumulative averages: new = fac1*sum + fac2*new */
-real r_accum_avg( real sum, real new, real fac1, real fac2 )
+/* Update cumulative averages: cum_sum = fac1*sum + fac2*cum_sum */
+real r_accum_avg( real sum, real cum_sum, real fac1, real fac2 )
 {
-    real tmp = fac1*sum + fac2*new;
+    real tmp = fac1*sum + fac2*cum_sum;
     return tmp;
 }
-double d_accum_avg( double sum, double new, double fac1, double fac2 )
+double d_accum_avg( double sum, double cum_sum, double fac1, double fac2 )
 {
-    double tmp = fac1*sum + fac2*new;
+    double tmp = fac1*sum + fac2*cum_sum;
     return tmp;
 }
-t_complex c_accum_avg( t_complex sum, t_complex new, real fac1, real fac2 )
+t_complex c_accum_avg( t_complex sum, t_complex cum_sum, real fac1, real fac2 )
 {
-    t_complex tmp = cadd( rcmul(fac1,sum), rcmul(fac2,new) );
+    t_complex tmp = cadd( rcmul(fac1,sum), rcmul(fac2,cum_sum) );
     return tmp;
 }
-t_complex_d cd_accum_avg( t_complex_d sum, t_complex_d new, double fac1, double fac2 )
+t_complex cd_accum_avg( t_complex sum, t_complex cum_sum, double fac1, double fac2 )
 {
-    t_complex_d tmp = cadd_d( rcmul_d(fac1,sum), rcmul_d(fac2,new) );
+    t_complex tmp = cadd( rcmul(fac1,sum), rcmul(fac2,cum_sum) );
     return tmp;
 }
-void cvec_accum_avg( cvec *sum, cvec new, real fac1, real fac2 )
+void cvec_accum_avg( cvec *sum, cvec cum_vec, real fac1, real fac2 )
 {
     cvec tmp;
     int d;
     for (d=0 ; d<DIM; d++)
     {
-        tmp [d] = c_accum_avg(*sum[d],new[d],fac1,fac2);
+        tmp [d] = c_accum_avg(*sum[d],cum_vec[d],fac1,fac2);
         *sum[d] = tmp[d];
     }
 }
@@ -5151,7 +5154,7 @@ update_AB_averages( t_waxsrec* wr )
     t_waxs_datablock   wd;
     t_waxsrecType     *wt;
     double             fac1A, fac2A, dtmp, fac1B= 0., fac2B = 0.;
-    t_complex_d        tmp_cd,  A_avB_tmp;
+    t_complex        tmp_cd,  A_avB_tmp;
     double             tmpc1, tmpc2;
     t_complex          tmp_c;
     real               tmp;
@@ -5199,11 +5202,11 @@ update_AB_averages( t_waxsrec* wr )
             tmp_cd.im       = wd->A[i].im;
             wd->avA  [i]    = cd_accum_avg( wd->avA    [i], tmp_cd,            fac1A, fac2A );
 
-            dtmp            = cabs2_d(wd->A[i]);
+            dtmp            = cabs2(wd->A[i]);
             wd->avAsq[i]    = d_accum_avg( wd->avAsq   [i], dtmp,              fac1A, fac2A );
             wd->avA4[i]     = d_accum_avg( wd->avA4    [i], dtmp*dtmp,         fac1A, fac2A );
-            wd->av_ReA_2[i] = d_accum_avg( wd->av_ReA_2[i], dsqr(wd->A[i].re), fac1A, fac2A );
-            wd->av_ImA_2[i] = d_accum_avg( wd->av_ImA_2[i], dsqr(wd->A[i].im), fac1A, fac2A );
+            wd->av_ReA_2[i] = d_accum_avg( wd->av_ReA_2[i], gmx::square(wd->A[i].re), fac1A, fac2A );
+            wd->av_ImA_2[i] = d_accum_avg( wd->av_ImA_2[i], gmx::square(wd->A[i].im), fac1A, fac2A );
 
             if (wr->bDoingSolvent)
             {
@@ -5214,11 +5217,11 @@ update_AB_averages( t_waxsrec* wr )
                 /* We could pick the avB from the GPU if available.
                  * But due to the low calculation but expensive data transfer cost, avB is recalculated here. */
                 wd->avB  [i]    = cd_accum_avg( wd->avB  [i], tmp_cd,              fac1B, fac2B );
-                dtmp            = cabs2_d(wd->B[i]);
+                dtmp            = cabs2(wd->B[i]);
                 wd->avBsq[i]    = d_accum_avg( wd->avBsq[i], dtmp,                 fac1B, fac2B );
                 wd->avB4 [i]    = d_accum_avg( wd->avB4 [i], dtmp*dtmp,            fac1B, fac2B );
-                wd->av_ReB_2[i] = d_accum_avg( wd->av_ReB_2[i], dsqr(wd->B[i].re), fac1B, fac2B );
-                wd->av_ImB_2[i] = d_accum_avg( wd->av_ImB_2[i], dsqr(wd->B[i].im), fac1B, fac2B );
+                wd->av_ReB_2[i] = d_accum_avg( wd->av_ReB_2[i], gmx::square(wd->B[i].re), fac1B, fac2B );
+                wd->av_ImB_2[i] = d_accum_avg( wd->av_ImB_2[i], gmx::square(wd->B[i].im), fac1B, fac2B );
             }
         }
 
@@ -5291,7 +5294,7 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
     t_waxs_datablock  wd;
     t_waxsrecType    *wt;
     int               i, j, jj, *ind, l, k, d, m, N, nFramesSolvent, t;
-    t_complex_d       tmpc, this_avA;
+    t_complex       tmpc, this_avA;
     double            sum, sum2, variance, dkItmp, tmp, Bprefact;
 
     waxs_debug("Entering calculate_I_dkI()");
@@ -5370,15 +5373,15 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
                 /* Equilvalent to equation below */
                 if (wr->bScaleI0)
                 {
-                    this_avA = cadd_d( wd->avA[i], wd->avAcorr[i]);
+                    this_avA = cadd( wd->avA[i], wd->avAcorr[i]);
                 }
                 else
                 {
                     this_avA = wd->avA[i];
                 }
-                wd->D[i] = cabs2_d( csub_d( this_avA, wd->avB[i] ) )  +
-                        ( wd->avAsq[i] - cabs2_d( wd->avA[i] ) ) -
-                        Bprefact*( wd->avBsq[i] - cabs2_d( wd->avB[i] ) );
+                wd->D[i] = cabs2( csub( this_avA, wd->avB[i] ) )  +
+                        ( wd->avAsq[i] - cabs2( wd->avA[i] ) ) -
+                        Bprefact*( wd->avBsq[i] - cabs2( wd->avB[i] ) );
             }
             else
             {
@@ -5419,7 +5422,7 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
                            <|A|^2>, <|B|^2>, and -2Re[ <B>.<A-B>*]    */
                         stepA              = wr->waxsStep + 1;
                         wd->IA[i]         += wd->avAsq[jj];
-                        wd->varIA[i]      += (wd->avA4[jj] - dsqr(wd->avAsq[jj]))/stepA;
+                        wd->varIA[i]      += (wd->avA4[jj] - gmx::square(wd->avAsq[jj]))/stepA;
                         /* Also get < A(|q|)> := int_dOmega[q] < A(q) > */
                         wd->avAqabs_re[i] += wd->avA[jj].re;
                         wd->avAqabs_im[i] += wd->avA[jj].im;
@@ -5435,53 +5438,53 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
                             stepB = (wr->waxsStep+1 < wr->nfrsolvent) ? wr->waxsStep+1 : wr->nfrsolvent;
 
                             wd->IB   [i] += wd->avBsq[jj];
-                            wd->varIB[i] += (wd->avB4[jj] - dsqr(wd->avBsq[jj]))/stepB;
+                            wd->varIB[i] += (wd->avB4[jj] - gmx::square(wd->avBsq[jj]))/stepB;
 
-                            tmpc          = csub_d( wd->avA[jj], wd->avB[jj]);
-                            tmpc          = conjugate_d(tmpc);
-                            tmpc          = cmul_d(wd->avB[jj], tmpc);
+                            tmpc          = csub( wd->avA[jj], wd->avB[jj]);
+                            tmpc          = conjugate(tmpc);
+                            tmpc          = cmul(wd->avB[jj], tmpc);
                             wd->Ibulk[i] -= 2*tmpc.re;
                             /* Also get < B(|q|)> := int_dOmega[q] < B(q) > */
                             wd->avBqabs_re[i] += wd->avB[jj].re;
                             wd->avBqabs_im[i] += wd->avB[jj].im;
 
                             wd->varIbulk[i] +=
-                                      dsqr( 2*wd->avB[jj].re                   ) * (wd->av_ReA_2[jj] - dsqr(wd->avA[jj].re))/stepA
-                                    + dsqr( 2*wd->avB[jj].im                   ) * (wd->av_ImA_2[jj] - dsqr(wd->avA[jj].im))/stepA
-                                    + dsqr(-2*wd->avA[jj].re + 4*wd->avB[jj].re) * (wd->av_ReB_2[jj] - dsqr(wd->avB[jj].re))/stepB
-                                    + dsqr(-2*wd->avA[jj].im + 4*wd->avB[jj].im) * (wd->av_ImB_2[jj] - dsqr(wd->avB[jj].im))/stepB;
+                                      gmx::square( 2*wd->avB[jj].re                   ) * (wd->av_ReA_2[jj] - gmx::square(wd->avA[jj].re))/stepA
+                                    + gmx::square( 2*wd->avB[jj].im                   ) * (wd->av_ImA_2[jj] - gmx::square(wd->avA[jj].im))/stepA
+                                    + gmx::square(-2*wd->avA[jj].re + 4*wd->avB[jj].re) * (wd->av_ReB_2[jj] - gmx::square(wd->avB[jj].re))/stepB
+                                    + gmx::square(-2*wd->avA[jj].im + 4*wd->avB[jj].im) * (wd->av_ImB_2[jj] - gmx::square(wd->avB[jj].im))/stepB;
 
                             /* Finally, we comute the contributions using the alternative fomula by Park et al.
                                that is D(q) = |<A-B>|^2 + var(A) - var(B)
                                These there terms are stored in variables AmB2, varA, varB
                              */
-                            wd->I_avAmB2[i] += cabs2_d(csub_d(wd->avA[jj], wd->avB[jj]));
-                            wd->I_varA[i]   += wd->avAsq[jj] - cabs2_d(wd->avA[jj]);
-                            wd->I_varB[i]   += wd->avBsq[jj] - cabs2_d(wd->avB[jj]);
+                            wd->I_avAmB2[i] += cabs2(csub(wd->avA[jj], wd->avB[jj]));
+                            wd->I_varA[i]   += wd->avAsq[jj] - cabs2(wd->avA[jj]);
+                            wd->I_varB[i]   += wd->avBsq[jj] - cabs2(wd->avB[jj]);
                             /* And the respective variances:
                                Note: |<A-B>|^2 = <Re A>^2 + <Im A>^2 + <Re B>^2 - 2*<Re B>.<Re A> (using <Im B> = 0)
                              */
                             wd->varI_avAmB2[i] +=
-                                      dsqr( 2*wd->avA[jj].re - 2*wd->avB[jj].re ) * (wd->av_ReA_2[jj] - dsqr(wd->avA[jj].re))/stepA
-                                    + dsqr( 2*wd->avA[jj].im                    ) * (wd->av_ImA_2[jj] - dsqr(wd->avA[jj].im))/stepA
-                                    + dsqr( 2*wd->avB[jj].re - 2*wd->avA[jj].re ) * (wd->av_ReB_2[jj] - dsqr(wd->avB[jj].re))/stepB;
+                                      gmx::square( 2*wd->avA[jj].re - 2*wd->avB[jj].re ) * (wd->av_ReA_2[jj] - gmx::square(wd->avA[jj].re))/stepA
+                                    + gmx::square( 2*wd->avA[jj].im                    ) * (wd->av_ImA_2[jj] - gmx::square(wd->avA[jj].im))/stepA
+                                    + gmx::square( 2*wd->avB[jj].re - 2*wd->avA[jj].re ) * (wd->av_ReB_2[jj] - gmx::square(wd->avB[jj].re))/stepB;
                             /* The standard error of the variance estimate is sigma^2*sqrt(2/k), where k is the
                                number of data points used to compute the variace
                                Will devide by # of waxs steps (k) when writing the contrib file.
                              */
                             wd->varI_varA[i] +=
-                                    2 * dsqr(wd->av_ReA_2[jj] - dsqr(wd->avA[jj].re))/stepA
-                                    + 2 * dsqr(wd->av_ImA_2[jj] - dsqr(wd->avA[jj].im))/stepA;
+                                    2 * gmx::square(wd->av_ReA_2[jj] - gmx::square(wd->avA[jj].re))/stepA
+                                    + 2 * gmx::square(wd->av_ImA_2[jj] - gmx::square(wd->avA[jj].im))/stepA;
                             wd->varI_varB[i] +=
-                                    2 * dsqr(wd->av_ReB_2[jj] - dsqr(wd->avB[jj].re))/stepB;
+                                    2 * gmx::square(wd->av_ReB_2[jj] - gmx::square(wd->avB[jj].re))/stepB;
 
                             if (wr->bScaleI0)
                             {
                                 /* Additional intensity due to scaling of I(q=0)
                                    Iscale_I0 := |<A+dA-B>|^2 - |<A-B>|^2 */
-                                tmpc             = csub_d( wd->avA[jj], wd->avB[jj]);
-                                tmpc             = cmul_d(conjugate_d(tmpc), wd->avAcorr[jj]);
-                                wd->I_scaleI0[i] = 2*tmpc.re + cabs2_d(wd->avAcorr[jj]);
+                                tmpc             = csub( wd->avA[jj], wd->avB[jj]);
+                                tmpc             = cmul(conjugate(tmpc), wd->avAcorr[jj]);
+                                wd->I_scaleI0[i] = 2*tmpc.re + cabs2(wd->avAcorr[jj]);
                             }
                         }
                     }
@@ -5504,9 +5507,9 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
                     if (!wr->bVacuum)
                     {
                         wd->IB[j]     = wd->avBsq[jj];
-                        tmpc          = csub_d( wd->avA[jj], wd->avB[jj]);
-                        tmpc          = conjugate_d(tmpc);
-                        tmpc          = cmul_d(wd->avB[jj], tmpc);
+                        tmpc          = csub( wd->avA[jj], wd->avB[jj]);
+                        tmpc          = conjugate(tmpc);
+                        tmpc          = cmul(wd->avB[jj], tmpc);
                         wd->Ibulk[j] -= 2*tmpc.re;
                     }
                     if (wd->I_errSolvDens)
@@ -5592,7 +5595,7 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
                     {
                         printf("WAXS step %d: Using 50%% of I(q) as stddev of I(q)\n", wr->waxsStep);
                     }
-                    wd->varI[i] = dsqr(0.5 * wd->I[i]);
+                    wd->varI[i] = gmx::square(0.5 * wd->I[i]);
                 }
                 if (wd->I_errSolvDens)
                 {
@@ -5683,7 +5686,7 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
             if (wr->bUseGPU)
             {
                 waxs_debug("wr->bCalcForces with gpu");
-#ifdef GMX_GPU
+#if 0  
                 double GPU_time ;
 
                 calculate_dkI_GPU (t, wd->dkI , wr->atomEnvelope_coord_A, wt->atomEnvelope_scatType_A, qstart, qhomenr, nabs, nprot, &GPU_time, cr);
@@ -5901,7 +5904,7 @@ waxs_intensity_Idiff(t_waxsrec *wr, t_waxsrecType *wt, int iq, gmx_bool bAllowNe
                   wr->potentialType, ewaxsPotentialNR);
     }
 
-    if (isnan(Idiff) || isinf(Idiff))
+    if (std::isnan(Idiff) || std::isinf(Idiff))
     {
         gmx_fatal(FARGS, "Error in waxs_intensity_Idiff(), with potential type = %s :\n"
                   "Found for iq = %d: I = %g -- Idiff = %g (NaN/inf) -- IexpFitted = %g -- f_ml = %g -- c_ml = %g\n",
@@ -5929,13 +5932,13 @@ waxs_intensity_sigma(t_waxsrec *wr, t_waxsrecType *wt, double *varIcalc, int iq)
         sigma = wt->f_ml * wt->Iexp_sigma[iq];
         break;
     case ewaxsWeightsEXP_plus_CALC:
-        sigma = sqrt( dsqr(wt->f_ml * wt->Iexp_sigma[iq]) + varIcalc[iq] );
+        sigma = sqrt( gmx::square(wt->f_ml * wt->Iexp_sigma[iq]) + varIcalc[iq] );
         break;
     case ewaxsWeightsEXP_plus_SOLVDENS:
-        sigma = sqrt( dsqr(wt->f_ml * wt->Iexp_sigma[iq]) + dsqr(wr->epsilon_buff * wt->wd->I_errSolvDens[iq] ));
+        sigma = sqrt( gmx::square(wt->f_ml * wt->Iexp_sigma[iq]) + gmx::square(wr->epsilon_buff * wt->wd->I_errSolvDens[iq] ));
         break;
     case ewaxsWeightsEXP_plus_CALC_plus_SOLVDENS:
-        sigma = sqrt( dsqr(wt->f_ml * wt->Iexp_sigma[iq]) + varIcalc[iq] + dsqr(wr->epsilon_buff * wt->wd->I_errSolvDens[iq] ));
+        sigma = sqrt( gmx::square(wt->f_ml * wt->Iexp_sigma[iq]) + varIcalc[iq] + gmx::square(wr->epsilon_buff * wt->wd->I_errSolvDens[iq] ));
         break;
     default:
         gmx_fatal(FARGS, "Unknown type of WAXS weights type (type %d, should be < %d)\n",
@@ -6062,14 +6065,14 @@ bayesian_md_calc_logLikelihood(t_waxsrec *wr, int t, double *Icalc, double *Ical
     for (i = 0; i< wt->nq; i++)
     {
         /* Compute the statistical "precisions", or 1/sigma^2 */
-        tau[i]    = 1./dsqr(waxs_intensity_sigma(wr, wt, IcalcVar, i));
+        tau[i]    = 1./gmx::square(waxs_intensity_sigma(wr, wt, IcalcVar, i));
     }
 
     /* get \hat{chi}^2, that is the sum of squared residuals (weighted by tau) */
     maximum_likelihood_est_fc_generic(wr, Icalc, wt->Iexp, tau, wt->nq, &wt->f_ml, &wt->c_ml, &sumSquaredResiduals);
     logL = -0.5 * zeta * sumSquaredResiduals;
 
-    if (isnan(logL) || isinf(logL))
+    if (std::isnan(logL) || std::isinf(logL))
     {
         gmx_fatal(FARGS, "Encountered an invalid log-likilihood (logL = %g)\n", logL);
     }
@@ -6121,7 +6124,7 @@ bayesian_sample_buffer_uncertainty(t_waxsrec *wr, double simtime, double *Icalc,
         logL = bayesian_md_calc_logLikelihood(wr, t, Icalc, IcalcVar, tau);
 
         /* Prior for epsilon is a Gaussian of width 1: pi(eps) = exp(-eps^2/2) */
-        priorFact = exp( - 0.5* (dsqr(wr->epsilon_buff) - dsqr(eps_prev)) );
+        priorFact = exp( - 0.5* (gmx::square(wr->epsilon_buff) - gmx::square(eps_prev)) );
         pjointRel = exp(logL - logLprev) * priorFact;
 
         /* Accept according to Metropolis criterium */
@@ -6184,16 +6187,16 @@ intensity_ensemble_average(int nq, int M, double *w, double **I_fixed, double **
         for (m = 0; m < M-1; m++)
         {
             Icalc   [i] += w[m] * I_fixed   [m][i];
-            IcalcVar[i] += dsqr(w[m]) * Ivar_fixed[m][i];  /* Gaussian error propagation */
+            IcalcVar[i] += gmx::square(w[m]) * Ivar_fixed[m][i];  /* Gaussian error propagation */
         }
         /* Add I / varI of MD simulation state */
         m = M-1;
         Icalc   [i] += w[m] * I_MD   [i];
-        IcalcVar[i] += dsqr(w[m]) * Ivar_MD[i];
+        IcalcVar[i] += gmx::square(w[m]) * Ivar_MD[i];
 
         /* Normalize */
         Icalc   [i] /= wsum;
-        IcalcVar[i] /= dsqr(wsum);
+        IcalcVar[i] /= gmx::square(wsum);
     }
 }
 
@@ -6324,7 +6327,7 @@ bayesian_sample_ensemble_weights(t_waxsrec *wr, double simtime, int nMCmove)
         }
 
         /* Sort R - use qsort_threadsafe() defined in gmx_sort.h */
-        qsort_threadsafe(R, M+1, sizeof(double), compare_double);
+        gmx_qsort_threadsafe(R, M+1, sizeof(double), compare_double);
 
         /* Pick new weights as differences between neighboring elements in sorted R */
         for (m = 0; m < M; m++)
@@ -6360,7 +6363,7 @@ bayesian_sample_ensemble_weights(t_waxsrec *wr, double simtime, int nMCmove)
             for (m = 0; m < M-1; m++)
             {
                 /* Change in umbrella potential fc/2*(w-w0)^2 on weights */
-                deltaVweights += dsqr(wNew[m] - wr->ensemble_weights_init[m]) - dsqr(wr->ensemble_weights[m] - wr->ensemble_weights_init[m]);
+                deltaVweights += gmx::square(wNew[m] - wr->ensemble_weights_init[m]) - gmx::square(wr->ensemble_weights[m] - wr->ensemble_weights_init[m]);
             }
             deltaVweights *= 0.5*wr->ensemble_weights_fc;
             pjointRel     *= exp(-deltaVweights/wr->kT);
@@ -6683,7 +6686,7 @@ waxs_md_pot_forces(t_commrec *cr, t_waxsrec *wr, real simtime, matrix *Rinv)
            tau_i = 1/sigma_i^2 */
         for (i = 0; i < nabs; i++)
         {
-            tau[i] = 1./dsqr(waxs_intensity_sigma(wr, wt, IcalcVar, i));
+            tau[i] = 1./gmx::square(waxs_intensity_sigma(wr, wt, IcalcVar, i));
         }
 
         /* Get fitting parameters f/c, or purely f, or no fitting (dependig on waxs-Iexp-fit) */
@@ -6694,7 +6697,7 @@ waxs_md_pot_forces(t_commrec *cr, t_waxsrec *wr, real simtime, matrix *Rinv)
         /* overall factor for pot and forces
          * Update in Dec. 2017. Multiply with Nindep, such that we follow a Bayesian logic if the force constant is fc == 1
          */
-        fact0 = fForceSwitch * wt->fc * wr->kT * sqr(fact_target_switch) * nShannonFactorUsed / wt->nq;
+        fact0 = fForceSwitch * wt->fc * wr->kT * gmx::square(fact_target_switch) * nShannonFactorUsed / wt->nq;
 
         /* At the beginning of the simulation (t < waxs_tau), the Icalc may be negative simply because Icalc is not yet
            converged. However, negative Icalc would lead to an error when coupling on a log scale. To avoid this error,
@@ -6725,11 +6728,11 @@ waxs_md_pot_forces(t_commrec *cr, t_waxsrec *wr, real simtime, matrix *Rinv)
                  *  The factor of 0.5 comes from the 1/2 in Eq. 17, Shevchuk & Hub, Plos Comp Biol 2017.
                  *  This factor ensures that we follow the Bayesian refinemnt with a force constant of fc=1.
                  */
-                thisv            = 0.5 * fact0 * dsqr(diffI[i]/sigma[i]);
+                thisv            = 0.5 * fact0 * gmx::square(diffI[i]/sigma[i]);
                 wt->vLast       += thisv;
                 wd->vAver [i]    = d_accum_avg(wd->vAver [i], (double)thisv, fac1, fac2 );
-                wd->vAver2[i]    = d_accum_avg(wd->vAver2[i], dsqr(thisv),   fac1, fac2 );
-                sumSquaredResidualsRecomputed += dsqr(diffI[i]/sigma[i]);
+                wd->vAver2[i]    = d_accum_avg(wd->vAver2[i], gmx::square(thisv),   fac1, fac2 );
+                sumSquaredResidualsRecomputed += gmx::square(diffI[i]/sigma[i]);
 
                 if (wr->wo->fpPot[t])
                 {
@@ -6784,7 +6787,7 @@ waxs_md_pot_forces(t_commrec *cr, t_waxsrec *wr, real simtime, matrix *Rinv)
                      *   We used to have a factor of 2 here - this was removed to follow the Bayesian formalism
                      *   if the force constant is fc=1.
                      */
-                    fact1 = -fact0 * contrastFactorUsed * diffI[i] / dsqr(sigma[i]);
+                    fact1 = -fact0 * contrastFactorUsed * diffI[i] / gmx::square(sigma[i]);
                     if (wr->potentialType == ewaxsPotentialLOG)
                     {
                         fact1 /= Icalc[i];
@@ -6817,7 +6820,7 @@ waxs_md_pot_forces(t_commrec *cr, t_waxsrec *wr, real simtime, matrix *Rinv)
 
 void
 do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
-        gmx_large_int_t step, t_waxsrec *wr,
+        gmx_int64_t step, t_waxsrec *wr,
         gmx_mtop_t *mtop, matrix box, int ePBC, gmx_bool bDoLog)
 {
     waxs_debug("do_waxs_md_low");
@@ -7034,7 +7037,7 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
         }
     }
 
-#ifdef GMX_GPU
+#if 0
     /* The envelope of the solvent density is needed on the GPU already in the first WAXS-step.
      * Attention: On the GPU we never recalculate the FT we only pass the values of the solvent FT by reference!
     */
@@ -7132,7 +7135,8 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
             /* Compute instantanous scattering amplitude of pure-solvent sytem, B(\vec{q}) */
             if (wr->bUseGPU)
             {
-#ifdef GMX_GPU
+
+#if 0
                 compute_scattering_amplitude_cuda (wr,cr,  t, wd->B, wr->atomEnvelope_coord_B , wt->atomEnvelope_scatType_B , wr->isizeB, 0,
                                                            qhomenr,
                                                            wt->type == escatterXRAY    ? wt->aff_table : NULL,
@@ -7157,7 +7161,7 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
         /* Compute instantanous scattering amplitude of protein + hydration layer, A(\vec{q}) */
         if (wr->bUseGPU)
         {
-#ifdef GMX_GPU
+#if 0
             compute_scattering_amplitude_cuda (wr,cr, t, wd->A , wr->atomEnvelope_coord_A, wt->atomEnvelope_scatType_A, wr->isizeA, wr->nindA_prot,
                                                       qhomenr,
                                                       wt->type == escatterXRAY    ? wt->aff_table : NULL,
@@ -7356,7 +7360,7 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
             for (t = 0; t < wr->nTypes; t++)
             {
                 /* Write coordinate and forces from all scattering groups into separate trr files */
-                fwrite_trn(wr->wo->xfout[t], wr->waxsStep, simtime, wr->wt[t].vLast, box, wr->nindA_prot, x_red, NULL, wr->wt[t].fLast );
+                gmx_trr_write_frame(wr->wo->xfout[t], wr->waxsStep, simtime, wr->wt[t].vLast, box, wr->nindA_prot, x_red, NULL, wr->wt[t].fLast );
             }
             sfree(x_red);
         }

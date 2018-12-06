@@ -39,14 +39,13 @@
 #ifndef _waxsmd_h
 #define _waxsmd_h
 
-#include "visibility.h"
-#include "index.h"
-#include "types/simple.h"
-#include "gmxcomplex.h"
-#include "oenv.h"
-#include "types/waxsrec.h"
-#include "types/waxstop.h"
-#include "gmx_wallcycle.h"
+#include "gromacs/topology/index.h"
+//#include "types/simple.h"
+#include "gromacs/math/gmxcomplex.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/waxs/waxsrec.h"
+#include "gromacs/waxs/waxstop.h"
+#include "gromacs/timing/wallcycle.h"
 
 /* suggested by Daniel Bowron in his EPSR tutorial (March 29,2010)
    Also see Sorensen et al, J. Chem. Phys. 113,9149 (2000)
@@ -107,7 +106,7 @@ int map_indices_molblock_atoms( gmx_mtop_t *mtop, int *map );
 void init_waxs_md( t_waxsrec *wr,
                    t_commrec *cr, t_inputrec *ir,
                    gmx_mtop_t *top_global,
-                   const output_env_t oenv, double t0,
+                   const gmx_output_env_t oenv, double t0,
                    const char *fntpsSolv, const char *fnxtcSolv,const char *fnOut,
                    const char *fnScatt,
                    t_state *state_local, gmx_bool bRerunMD, gmx_bool bWaterOptSet,
@@ -133,11 +132,11 @@ t_spherical_map *gen_qvecs_map( real minq, real maxq, int nqabs, int J,
 /* Header placement obsoleted by done_waxs_md*/
 void done_waxs_solvent(t_waxs_solvent ws );
 
-void done_waxs_output(t_waxsrec *wr, output_env_t oenv);
+void done_waxs_output(t_waxsrec *wr, gmx_output_env_t oenv);
 
 void waxs_ensemble_average(t_waxsrec *wr, t_waxsrecType *wt, t_commrec *cr, int iq, gmx_bool bVerbose);
 
-void do_waxs_md_low(t_commrec *cr, rvec x[], double t, gmx_large_int_t step,
+void do_waxs_md_low(t_commrec *cr, rvec x[], double t, gmx_int64_t step,
                     t_waxsrec *wr, gmx_mtop_t *mtop, matrix box, int ePBC, gmx_bool bDoLog);
 
 /* Does MPI communication between global averages on master, and its local copies,
