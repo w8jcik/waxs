@@ -164,6 +164,7 @@
 
 #endif /* SIMD level */
 
+#define gmx_large_int_pfmt "%ld"
 
 #define WAXS_MAX(a,b) ((a)>(b)?(a):(b))
 #define WAXS_MIN(a,b) ((a)<(b)?(a):(b))
@@ -175,6 +176,7 @@
 
 #define XRAY_NEUTRON_STRING(x) ((x == escatterXRAY) ? "xray" : "neutron")
 
+static t_complex cnul { 0.0, 0.0 };
 
 #define waxs_debug(x)
 /*
