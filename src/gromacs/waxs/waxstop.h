@@ -36,11 +36,11 @@
 #ifndef _waxstop_h
 #define _waxstop_h
 
-#include "simple.h"
-#include "gmxcomplex.h"
+#include "gromacs/math/gmxcomplex.h"
 // #include "topology.h"
-#include "state.h"
-#include "oenv.h"
+#include "gromacs/mdtypes/state.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/utility/real.h"
 
 // enum { SF_FUNCTYPE_NULL, SF_FUNCTYPE_CROMER_MANN, SF_FUNCTYPE_NUCLEAR };
 
