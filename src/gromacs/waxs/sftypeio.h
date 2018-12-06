@@ -51,8 +51,6 @@
 #define _sftypeio_h
 
 #include <stdio.h>
-//#include "typedefs.h"
-//#include "macros.h"
 #include "gromacs/gmxpreprocess/grompp.h"
 #include "gromacs/waxs/waxstop.h"
 #include "gromacs/waxs/waxsrec.h"

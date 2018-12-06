@@ -40,7 +40,6 @@
 #define _waxsmd_h
 
 #include "gromacs/topology/index.h"
-//#include "types/simple.h"
 #include "gromacs/math/gmxcomplex.h"
 #include "gromacs/fileio/oenv.h"
 #include "gromacs/waxs/waxsrec.h"

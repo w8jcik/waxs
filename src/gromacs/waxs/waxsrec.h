@@ -33,20 +33,16 @@
  * Gallium Rubidium Oxygen Manganese Argon Carbon Silicon
  */
 
-#ifndef _waxsrec_h
-#define _waxsrec_h
+#ifndef GMX_waxsrec_h
+#define GMX_waxsrec_h
 
-//#include "gromacs/topology/simple.h"
-// #include "topology.h"
-#include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/real.h"
-#include "gromacs/fileio/oenv.h"
 #include "gromacs/waxs/gmx_envelope.h"
 #include "gromacs/waxs/gmx_random.h"
-#include "gromacs/topology/topology.h"
-
 #include "gromacs/math/gmxcomplex.h"
 
+struct gmx_mtop_t;
+class t_state;
 
 #ifdef __cplusplus
 extern "C" {
@@ -182,7 +178,7 @@ typedef struct {
 } t_waxsrecType;
 
 
-typedef struct {
+typedef struct t_waxsrec {
     int             nTypes;                 /* Number of scattering groups: xray or neutron types */
     t_waxsrecType  *wt;                     /* records to variables that are specific to the scattering type (size nTypes) */
 

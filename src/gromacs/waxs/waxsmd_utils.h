@@ -1,4 +1,3 @@
-//#include "sysstuff.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/futil.h"
