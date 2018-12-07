@@ -1292,7 +1292,7 @@ double gmx::do_md(FILE *fplog, t_commrec *cr, const gmx::MDLogger &mdlog,
                      state->lambda, graph,
                      fr, vsite, mu_tot, t, ed, bBornRadii,
                      (bNS ? GMX_FORCE_NS : 0) | force_flags,
-                     ddOpenBalanceRegion, ddCloseBalanceRegion);
+                     ddOpenBalanceRegion, ddCloseBalanceRegion, top_global);
         }
 
         if (EI_VV(ir->eI) && !startingFromCheckpoint && !bRerunMD)

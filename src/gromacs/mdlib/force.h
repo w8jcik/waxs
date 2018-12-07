@@ -173,7 +173,8 @@ void do_force(FILE *log, t_commrec *cr,
               gmx_bool bBornRadii,
               int flags,
               DdOpenBalanceRegionBeforeForceComputation ddOpenBalanceRegion,
-              DdCloseBalanceRegionAfterForceComputation ddCloseBalanceRegion);
+              DdCloseBalanceRegionAfterForceComputation ddCloseBalanceRegion,
+              gmx_mtop_t *top_global = nullptr);
 
 /* Communicate coordinates (if parallel).
  * Do neighbor searching (if necessary).

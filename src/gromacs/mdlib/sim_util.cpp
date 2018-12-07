@@ -1046,6 +1046,7 @@ static void do_force_cutsVERLET(FILE *fplog, t_commrec *cr,
                                 t_inputrec *inputrec,
                                 gmx_int64_t step, t_nrnb *nrnb, gmx_wallcycle_t wcycle,
                                 gmx_localtop_t *top,
+                                gmx_mtop_t *mtop,
                                 gmx_groups_t gmx_unused *groups,
                                 matrix box, gmx::PaddedArrayRef<gmx::RVec> x, history_t *hist,
                                 gmx::PaddedArrayRef<gmx::RVec> force,
@@ -1724,6 +1725,19 @@ static void do_force_cutsVERLET(FILE *fplog, t_commrec *cr,
         }
     }
 
+    if (inputrec->waxs_nTypes > 0)
+    {
+        wallcycle_start(wcycle, ewcWAXS);
+        /* Compute WAXS intensity, potential, & forces.
+           These are computed here because the forces should not go into the virial.
+        */
+        do_waxs_md(cr, mdatoms, as_rvec_array(x.data()), t, step, fr, mtop, top, box, inputrec->ePBC, f,
+                   wcycle,
+                   &enerd->term[F_XRAY_COUPLE],
+                   &enerd->term[F_NEUTRON_COUPLE]);
+        wallcycle_stop(wcycle, ewcWAXS);
+    }
+    
     if (PAR(cr) && !thisRankHasDuty(cr, DUTY_PME))
     {
         /* In case of node-splitting, the PP nodes receive the long-range
@@ -1756,6 +1770,7 @@ static void do_force_cutsGROUP(FILE *fplog, t_commrec *cr,
                                t_inputrec *inputrec,
                                gmx_int64_t step, t_nrnb *nrnb, gmx_wallcycle_t wcycle,
                                gmx_localtop_t *top,
+                               gmx_mtop_t *mtop,
                                gmx_groups_t *groups,
                                matrix box, gmx::PaddedArrayRef<gmx::RVec> x, history_t *hist,
                                gmx::PaddedArrayRef<gmx::RVec> force,
@@ -1815,7 +1830,7 @@ static void do_force_cutsGROUP(FILE *fplog, t_commrec *cr,
                     x, mdatoms->chargeA, mdatoms->chargeB, mdatoms->nChargePerturbed,
                     mu, mu+DIM);
         }
-    }
+   }
 
     if (fr->ePBC != epbcNONE)
     {
@@ -2060,6 +2075,20 @@ static void do_force_cutsGROUP(FILE *fplog, t_commrec *cr,
         }
     }
 
+    if (inputrec->waxs_nTypes > 0)
+    {
+        wallcycle_start(wcycle, ewcWAXS);
+        /* Compute WAXS intensity, potential, & forces.
+           These are computed here because the forces should not go into the virial.
+        */
+        fprintf(fplog, "RUNNING WAXS MD....LALALA!!\n");
+        do_waxs_md(cr, mdatoms, as_rvec_array(x.data()), t, step, fr, mtop, top, box, inputrec->ePBC, f,
+                   wcycle,
+                   &enerd->term[F_XRAY_COUPLE],
+                   &enerd->term[F_NEUTRON_COUPLE]);
+        wallcycle_stop(wcycle, ewcWAXS);
+    }
+    
     if (PAR(cr) && !thisRankHasDuty(cr, DUTY_PME))
     {
         /* In case of node-splitting, the PP nodes receive the long-range
@@ -2106,7 +2135,8 @@ void do_force(FILE *fplog, t_commrec *cr,
               gmx_bool bBornRadii,
               int flags,
               DdOpenBalanceRegionBeforeForceComputation ddOpenBalanceRegion,
-              DdCloseBalanceRegionAfterForceComputation ddCloseBalanceRegion)
+              DdCloseBalanceRegionAfterForceComputation ddCloseBalanceRegion,
+              gmx_mtop_t *mtop)
 {
     /* modify force flag if not doing nonbonded */
     if (!fr->bNonbonded)
@@ -2123,6 +2153,7 @@ void do_force(FILE *fplog, t_commrec *cr,
             do_force_cutsVERLET(fplog, cr, inputrec,
                                 step, nrnb, wcycle,
                                 top,
+                                mtop,
                                 groups,
                                 box, x, hist,
                                 force, vir_force,
@@ -2141,6 +2172,7 @@ void do_force(FILE *fplog, t_commrec *cr,
             do_force_cutsGROUP(fplog, cr, inputrec,
                                step, nrnb, wcycle,
                                top,
+                               mtop,
                                groups,
                                box, x, hist,
                                force, vir_force,
