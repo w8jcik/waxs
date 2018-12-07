@@ -102,7 +102,11 @@ typedef struct t_inputrec_strings
          energy[STRLEN], user1[STRLEN], user2[STRLEN], vcm[STRLEN], x_compressed_groups[STRLEN],
          couple_moltype[STRLEN], orirefitgrp[STRLEN], egptable[STRLEN], egpexcl[STRLEN],
          wall_atomtype[STRLEN], wall_density[STRLEN], deform[STRLEN], QMMM[STRLEN],
-         imd_grp[STRLEN];
+         imd_grp[STRLEN],
+         waxs_coupl_types[STRLEN],
+         waxs_solute[STRLEN], waxs_solvent[STRLEN], waxs_rotfit[STRLEN], waxs_pbcatom[STRLEN],
+         waxs_ensemble_init_w[STRLEN], waxs_fc[STRLEN], waxs_nq[STRLEN], waxs_start_q[STRLEN], waxs_end_q[STRLEN],
+         waxs_deuter_conc[STRLEN];
     char   fep_lambda[efptNR][STRLEN];
     char   lambda_weights[STRLEN];
     char **pull_grp;
@@ -2240,6 +2244,65 @@ void get_ir(const char *mdparin, const char *mdparout,
     ITYPE ("dh_hist_size", fep->dh_hist_size, 0);
     RTYPE ("dh_hist_spacing", fep->dh_hist_spacing, 0.1);
 
+    /* Wide/Small-angle X-ray scattering and SANS stuff */
+    CCTYPE ("Scattering coupling stuff: xray and/or neutron (multiple neutron possible)");
+    // EETYPE("scatt-coupl", ir->escatter, escatter_names);
+    STYPE ("scatt-coupl", is->waxs_coupl_types, NULL);
+    CTYPE ("Selection of solute, solvent and fit group");
+    STYPE ("waxs-solute", is->waxs_solute, NULL);
+    STYPE ("waxs-solvent", is->waxs_solvent, NULL);
+    STYPE ("waxs-rotfit", is->waxs_rotfit, NULL);
+    CTYPE ("WAXS pbc atom list near center of solute (uses global indices, 0 = number-wise center, -1 = used atomic distances)");
+    STYPE ("waxs-pbcatom", is->waxs_pbcatom, NULL);
+    CTYPE ("Coupling time constant (ps). (0=no averaging; -1=non-weighted average)");
+    RTYPE ("waxs-tau", ir->waxs_tau, 100);
+    CTYPE ("Gradual switch target SWAXS curve from current to experimental curve within this time (ps)");
+    RTYPE ("waxs-t-target", ir->waxs_t_target, 0);
+    CTYPE ("WAXS coupling potential type (linear or log)");
+    EETYPE("waxs-potential", ir->ewaxs_potential, waxspotential_names);
+    CTYPE ("WAXS coupling weights (uniform, exp, exp+calc, exp+solvdens, exp+calc+solvdens)");
+    EETYPE("waxs-weights", ir->ewaxs_weights, waxsweights_names);
+    CTYPE ("Extra overall force constant (one per scatt-coupl type)");
+    STYPE ("waxs-fc", is->waxs_fc, NULL);
+    CTYPE ("Frequency of spectrum calculation (steps)");
+    ITYPE ("waxs-nstcalc", ir->waxs_nstcalc, 500);
+    CTYPE ("Number of pure solvent structure factors to use (-1 = take from xtc)");
+    ITYPE ("waxs-nfrsolvent", ir->waxs_nfrsolvent, -1);
+    CTYPE ("Frequency of output (steps)");
+    ITYPE ("waxs-nstlog", ir->waxs_nstlog, 500);
+    CTYPE ("Nr of q values, starting and ending q (one per scatt-coupl type)");
+    STYPE ("waxs-nq", is->waxs_nq, NULL);
+    STYPE ("waxs-startq", is->waxs_start_q, NULL);
+    STYPE ("waxs-endq", is->waxs_end_q, NULL);
+    CTYPE ("Nr of point for spherical quadrature (0 = auto)");
+    ITYPE ("waxs-nsphere", ir->waxs_J, 0);
+    CTYPE ("Fit I(exp) on the fly to I(calc): no / scale-and-offset /scale");
+    EETYPE("waxs-Iexp-fit", ir->ewaxs_Iexp_fit, waxs_Iexp_fit_names);
+    CTYPE ("Electron density of solvent (0 = use xtc, 334 = experiment)");
+    RTYPE ("waxs-solvdens", ir->waxs_denssolvent, 0);
+    CTYPE ("Relative uncertainty of solvent density (e.g., 0.01 means 1% uncertainty)");
+    RTYPE ("waxs-solvdens-uncert", ir->waxs_denssolventRelErr, 0);
+    CTYPE ("Bayesian sampling of solvent density uncertainty (no/yes)");
+    EETYPE ("waxs-solvdens-uncert-bayesian", ir->ewaxs_solvdensUnsertBayesian, waxssolvdensunsertbayesian_names);
+    CTYPE ("Buffer subtraction reduced by solute volume (no/yes)");
+    EETYPE ("waxs-correct-buffer", ir->ewaxs_correctbuff, waxscorrectbuff_names);
+    CTYPE ("Deuterium concentration (0 - 1), for each neutron group");
+    STYPE ("waxs-deuter-conc", is->waxs_deuter_conc, NULL);
+    CTYPE ("Scale I(q=0) to target pattern while coupling");
+    EETYPE("waxs-scale-i0", ir->ewaxs_bScaleI0, waxs_bScaleI0_names);
+    CTYPE ("Warn if solvation layer is thinner than:");
+    RTYPE ("waxs-warnlay", ir->waxs_warn_lay, 0.3);
+    CTYPE ("Anisotropic pattern: no, yes, cos2alpha");
+    EETYPE("waxs-anisotropic", ir->ewaxsaniso, waxsaniso_names);
+    CTYPE ("Energy of X-ray beam");
+    RTYPE ("waxs-energy", ir->waxs_xray_energy, 12);
+    CTYPE ("WAXS ensemble type (none, bayesian-one-refined, maxent-ensemble)");
+    EETYPE("waxs-ensemble-type", ir->ewaxs_ensemble_type, waxsensemble_names);
+    CTYPE ("Ensemble refinement - number of states (will read files intentisty_stateXX.dat)");
+    ITYPE ("waxs-ensemble-nstates", ir->waxs_ensemble_nstates, 0);
+    CTYPE ("Ensemble refinement - initial weights and force constant");
+    STYPE ("waxs-ensemble-init-w", is->waxs_ensemble_init_w, NULL);
+    RTYPE ("waxs-ensemble-fc", ir->waxs_ensemble_fc, 0.0);
     /* Non-equilibrium MD stuff */
     CCTYPE("Non-equilibrium MD stuff");
     STYPE ("acc-grps",    is->accgrps,        nullptr);
@@ -3256,10 +3319,12 @@ void do_index(const char* mdparin, const char *ndx,
     real          tau_min;
     int           nstcmin;
     int           nacg, nfreeze, nfrdim, nenergy, nvcm, nuser;
+    int           nuser_solute, nuser_solvent, nuser_rotfit ;
     char         *ptr1[MAXPTR], *ptr2[MAXPTR], *ptr3[MAXPTR];
     int           i, j, k, restnm;
+    real          sum_w;
     gmx_bool      bExcl, bTable, bSetTCpar, bAnneal, bRest;
-    int           nQMmethod, nQMbasis, nQMg;
+    int           nQMmethod, nQMbasis, nQMg, nNeutron, iNeutron;
     char          warn_buf[STRLEN];
     char*         endptr;
 
@@ -3700,6 +3765,296 @@ void do_index(const char* mdparin, const char *ndx,
     do_numbering(natoms, groups, nofg, ptr1, grps, gnames, egcORFIT,
                  restnm, egrptpALL_GENREST, bVerbose, wi);
 
+    /* WAXS input processing */
+    ir->waxs_nTypes = str_nelem(is->waxs_coupl_types, MAXPTR, ptr1);
+    snew(ir->escatter, ir->waxs_nTypes);
+    nNeutron = 0;
+    if (ir->waxs_nTypes > 0)
+    {
+        for (i = 0; i<ir->waxs_nTypes; i++)
+        {
+            if (! gmx_strcasecmp(ptr1[i], "xray"))
+            {
+                ir->escatter[i] = escatterXRAY;
+            }
+            else if (! gmx_strcasecmp(ptr1[i], "neutron"))
+            {
+                ir->escatter[i] = escatterNEUTRON;
+                nNeutron++;
+            }
+            else
+            {
+                sprintf(warn_buf, "Invalid scattering type %d of %d: %s\n", i, ir->waxs_nTypes, ptr1[i]);
+                warning_error(wi, warn_buf);
+            }
+        }
+        if (ir->cutoff_scheme == ecutsVERLET)
+        {
+            /*warning_error(wi, "WAXS calculations are not currently implemented with Verlet cutoffs!\n"
+              "Please use Groups cut-off scheme for WAXS calculations.\n");*/
+        }
+
+        if (ir->waxs_nstcalc <=0)
+        {
+            sprintf(warn_buf, "waxs_nstcalc should be larger than 0 (found %d)\n", ir->waxs_nstcalc);
+            warning_error(wi, warn_buf);
+        }
+
+        /* Solvent Density weights requires a non-zero relative error */
+        if (ir->ewaxs_weights > 2 && ir->waxs_denssolventRelErr <=0 )
+        {
+            sprintf(warn_buf, "The weighting scheme for WAXS Potentials include solvent density, but waxs-solvdens-uncert is set to %g.\n",
+                    ir->waxs_denssolventRelErr );
+            warning_error(wi, warn_buf);
+        }
+
+        if (ir->ewaxs_weights < 3 && ir->waxs_denssolventRelErr >0 )
+        {
+            sprintf(warn_buf, "The weighting scheme for WAXS Potentials do not include solvent density, but waxs-solvdens-uncert is set to %g. Setting it to 0 to avoid unneeded calculations!\n", ir->waxs_denssolventRelErr );
+            warning(wi, warn_buf);
+            ir->waxs_denssolventRelErr=0;
+        }
+
+        if (bSetTCpar &&
+            ( ir->waxs_tau>0. && ( (tau_min > 0.5*ir->waxs_tau) || !EI_RANDOM(ir->eI) ) ) )
+        {
+            sprintf(warn_buf,
+                    "When coupling to an averaged WAXS intensity (waxs_tau=%g), a stochastic/brownian "
+                    "dynamics integrator with a shorter time constant (tau_t) is advised (found %g). Otherwise, "
+                    "you may pump energy into the system\n",ir->waxs_tau,tau_min);
+            warning(wi,warn_buf);
+        }
+    }
+    
+    nuser_solute = str_nelem(is->waxs_solute, MAXPTR, ptr3); /* reserve ptr3 for empty rotfit case below */
+    /* If nuser_solute==0, this will generate a tpr for the pure-water box */
+    /*if (ir->escatter && nuser!=1)
+      gmx_fatal(FARGS,"WAXS mdp error: one solute group must be specified"
+      " (found %d).\n", nuser); */
+    do_numbering(natoms, groups, nuser_solute, ptr3, grps, gnames, egcWAXSSolute,
+                 restnm, egrptpALL_GENREST, bVerbose, wi);
+    nuser_solvent = str_nelem(is->waxs_solvent, MAXPTR, ptr2);
+    do_numbering(natoms, groups, nuser_solvent, ptr2, grps, gnames, egcWAXSSolvent,
+                 restnm, egrptpALL_GENREST, bVerbose, wi);
+    /* nuser_solvent is symmetric to nuser_solute, and thus can allow for multiple groups. */
+    /* if (ir->escatter != escatterNO && nuser_solvent>1)
+       gmx_fatal(FARGS,"Only one group allowed as solvent in WAXS analysis"
+       " (found %d).\n", nuser_solvent); */
+    if (ir->waxs_nTypes > 0 && nuser_solute==0 && nuser_solvent==0)
+        gmx_fatal(FARGS,"Error in WAXS mdp options: you must provide a solute group, a solvent group, or both.\n"
+                  "(found %d and %d groups for solute and solvent, respectively.\n\n"
+                  "For generating a tpr for the pure-solvent box (to get the excluded-solvent scatting),"
+                  " provide only a group for waxs-solvent and leave waxs-solute empty.",
+                  nuser_solute, nuser_solvent);
+    /* fprintf(stderr,"In readir.c, nuser_solute: %d, nuser_solvent: %d.\n ", nuser_solute,nuser_solvent); */
+    /* Convert the pbc-atom input into a list of pbcatoms. */
+    ir->waxs_npbcatom = str_nelem(is->waxs_pbcatom, MAXPTR, ptr1);
+    if (ir->waxs_nTypes > 0 && ir->waxs_npbcatom == 0)
+    {
+        warning_error(wi, "Scattering calculations require a PBC atom (waxs-pbcatom");
+    }
+    if (ir->waxs_nTypes > 0)
+    {
+        snew(ir->waxs_pbcatoms, ir->waxs_npbcatom);
+        for (i=0; i < ir->waxs_npbcatom; i++)
+        {
+            /* Do out of bounds checking here */
+            /* Switch to intra-gmx numbering starting from zero */
+            ir->waxs_pbcatoms[i] = atoi(ptr1[i]) - 1;
+            if ( natoms <= ir->waxs_pbcatoms[i] )
+            {
+                sprintf(warn_buf,
+                        "A pbcatom for WAXS calculations is greater than the number of atoms in the system!\n"
+                        "Please check waxs-pbcatom settings!\n");
+                warning_error(wi, warn_buf);
+            }
+        }
+    }
+    else
+    {
+        ir->waxs_npbcatom = 0;
+        ir->waxs_pbcatoms = NULL;
+    }
+    if (ir->waxs_nTypes > 0 && nuser_solute != 0  && ir->waxs_npbcatom == 1 && ir->waxs_pbcatoms[0] == -1)
+    {
+        sprintf(warn_buf,
+                "Scattering calculations require the solute to be whole.\n"
+                "The default number-wise centre (waxs_npbcatom = 0) is inaccurate and can abort\n"
+                "the simulation. Consider giving specific atom-indices near the geometric centre.\n");
+        warning_note(wi, warn_buf);
+    }
+
+    nuser_rotfit = str_nelem(is->waxs_rotfit, MAXPTR, ptr2);
+    if (nuser_rotfit == 0 && nuser_solute != 0 )
+    {
+        if (ir->waxs_nTypes > 0)
+        {
+            sprintf(warn_buf,
+                    "No selection found for rotational-fitting. Will use the default \n"
+                    "(all waxs-solute atoms), which can take a long time to calculate!\n");
+            warning_note(wi, warn_buf);
+        }
+        /* Copy the group from the WAXS-solute over to the fitting group.*/
+        do_numbering(natoms, groups, nuser_solute, ptr3, grps, gnames, egcROTFIT,
+                     restnm, egrptpALL_GENREST, bVerbose, wi);
+    }
+    else
+    {
+        do_numbering(natoms, groups, nuser_rotfit, ptr2, grps, gnames, egcROTFIT,
+                     restnm, egrptpALL_GENREST, bVerbose, wi);
+    }
+
+    /* WAXS/Neutron force constant, nq, startq, endq: need 1 parameter per xray or neutron */
+    snew(ir->waxs_fc,          ir->waxs_nTypes);
+    snew(ir->waxs_nq,          ir->waxs_nTypes);
+    snew(ir->waxs_start_q,     ir->waxs_nTypes);
+    snew(ir->waxs_end_q,       ir->waxs_nTypes);
+    snew(ir->waxs_deuter_conc, ir->waxs_nTypes);
+    if (ir->waxs_nTypes > 0)
+    {
+        /* Picking WAXS/NEUTRON force constants */
+        nuser = str_nelem(is->waxs_fc, MAXPTR, ptr1);
+        if (nuser != ir->waxs_nTypes)
+        {
+            gmx_fatal(FARGS, "Expected %d valus for mdp option waxs-fc (found %d)\n", ir->waxs_nTypes, nuser);
+        }
+    
+        for (i = 0; i < ir->waxs_nTypes; i++)
+        {
+            ir->waxs_fc[i] = atof(ptr1[i]);
+        }
+
+        /* Picking WAXS/NEUTRON number of q points */
+        nuser = str_nelem(is->waxs_nq, MAXPTR, ptr1);
+        if (nuser != ir->waxs_nTypes)
+        {
+            gmx_fatal(FARGS, "Expected %d valus for mdp option waxs-nq (found %d)\n", ir->waxs_nTypes, nuser);
+        }
+        for (i = 0; i < ir->waxs_nTypes; i++)
+        {
+            ir->waxs_nq[i] = atoi(ptr1[i]);
+        }
+
+        /* Picking WAXS/NEUTRON q-start */
+        nuser = str_nelem(is->waxs_start_q, MAXPTR, ptr1);
+        if (nuser != ir->waxs_nTypes)
+        {
+            gmx_fatal(FARGS, "Expected %d valus for mdp option waxs-startq (found %d)\n", ir->waxs_nTypes, nuser);
+        }
+        for (i = 0; i < ir->waxs_nTypes; i++)
+        {
+            ir->waxs_start_q[i] = atof(ptr1[i]);
+        }
+
+        /* Picking WAXS/NEUTRON q-end */
+        nuser = str_nelem(is->waxs_end_q, MAXPTR, ptr1);
+        if (nuser != ir->waxs_nTypes)
+        {
+            gmx_fatal(FARGS, "Expected %d valus for mdp option waxs-endq (found %d)\n", ir->waxs_nTypes, nuser);
+        }
+        for (i = 0; i < ir->waxs_nTypes; i++)
+        {
+            ir->waxs_end_q[i] = atof(ptr1[i]);
+        }
+
+        /* Picking deuterium concentration */
+        nuser = str_nelem(is->waxs_deuter_conc, MAXPTR, ptr1);
+        if (nuser != nNeutron)
+        {
+            gmx_fatal(FARGS, "Expected %d valus for mdp option waxs-deuter-conc, one for each neutron group (found %d)\n", nNeutron, nuser);
+        }
+        iNeutron = 0;
+        for (i = 0; i < ir->waxs_nTypes; i++)
+        {
+            /* waxs_deuter_conc has size waxs_nTypes, but ptr1 has size nNeutron */
+            if (ir->escatter[i] == escatterNEUTRON)
+            {
+                ir->waxs_deuter_conc[i] = atof(ptr1[iNeutron++]);
+                if (ir->waxs_deuter_conc[i] < 0 || ir->waxs_deuter_conc[i] > 1)
+                {
+                    warning_error(wi, "Deuterium fraction in solvent (waxs-deuter-conc) should be between 0 and 1.");
+                }
+            }
+            else
+            {
+                ir->waxs_deuter_conc[i] = -1;
+            }
+        }
+
+        if (ir->ewaxs_weights == ewaxsWeightsUNIFORM && ir->ewaxs_potential == ewaxsPotentialLINEAR)
+        {
+            warning_note(wi, "In case you use this tpr for a SAXS-driven MD, you should not combine a "
+                         "linear SAXS potential (waxs-potential) with a uniform weights (waxs-weights), "
+                         "since will lead to huge forces. Uniform weights are meant for potential on a log "
+                         "scale.");
+        }
+    }
+
+
+    if (ir->ewaxs_ensemble_type == ewaxsEnsemble_maxentEnsemble)
+    {
+        warning_error(wi, "Ensmelbe type maxent-ensemble is not yet supported\n");
+    }
+
+    if (ir->waxs_nTypes > 0 && ir->waxs_ensemble_nstates > 0 && ir->ewaxs_ensemble_type == ewaxsEnsemble_BayesianOneRefined)
+    {
+        fprintf(stderr, "readir says: ir->waxs_nTypes = %d, ir->waxs_ensemble_nstates: %d", ir->waxs_nTypes, ir->waxs_ensemble_nstates);
+        if (ir->waxs_ensemble_nstates == 1 || ir->waxs_ensemble_nstates >= 50 )
+        {
+            gmx_fatal(FARGS, "waxs-ensemble-nstate should be either 0 (no ensemble refinement), >= 2, and < 50 (found %d)\n",
+                      ir->waxs_ensemble_nstates);
+        }
+        /* Reading initial weights for states of the refined ensemble */
+        nuser = str_nelem(is->waxs_ensemble_init_w, MAXPTR, ptr1);
+        if (ir->waxs_ensemble_nstates != nuser && nuser > 0)
+        {
+            gmx_fatal(FARGS,
+                      "The number of initial weithts for WAXS ensemble states is wrong. Expected %d values, found %d !\n",
+                      ir->waxs_ensemble_nstates, nuser);
+        }
+
+        snew(ir->waxs_ensemble_init_w, ir->waxs_ensemble_nstates);
+        if (nuser == 0)
+        {
+            sprintf(warn_buf,
+                    "No initial weights given for states in SAXS ensemble refinement - using equal weights (%g)\n",
+                    1./ir->waxs_ensemble_nstates);
+            warning_note(wi, warn_buf);
+            for (i = 0; i < ir->waxs_ensemble_nstates; i++)
+            {
+                ir->waxs_ensemble_init_w[i] = 1./ir->waxs_ensemble_nstates;
+            }
+        }
+        else
+        {
+            sum_w = 0;
+            for (i = 0; i < ir->waxs_ensemble_nstates; i++)
+            {
+                if (atof(ptr1[i]) < 0)
+                {
+                    gmx_fatal(FARGS,
+                              "Found negative weight of state in SWAXS refinement (%g)!\n", atof(ptr1[i]));
+                }
+                sum_w += atof(ptr1[i]);
+            }
+        
+            for (i = 0; i < ir->waxs_ensemble_nstates; i++)
+            {
+                ir->waxs_ensemble_init_w[i]  = atof(ptr1[i])/sum_w;
+            }
+        }
+        fprintf(stderr, "Initial weights of states in SAXS refinement:");
+        for (i = 0; i < ir->waxs_ensemble_nstates; i++)
+        {
+            fprintf(stderr, " %g", ir->waxs_ensemble_init_w[i]);
+        }
+        fprintf(stderr, "\n\n");
+    }
+    else
+    {
+        ir->waxs_ensemble_init_w  = NULL;
+        ir->waxs_ensemble_nstates = 0;
+    }
     /* QMMM input processing */
     nQMg          = str_nelem(is->QMMM, MAXPTR, ptr1);
     nQMmethod     = str_nelem(is->QMmethod, MAXPTR, ptr2);
