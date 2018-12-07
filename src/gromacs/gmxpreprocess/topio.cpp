@@ -1006,6 +1006,10 @@ static char **read_topol(const char *infile, const char *outfile,
                             push_bond(d, plist, mi0->plist, &(mi0->atoms), atype, pline, TRUE,
                                       bGenPairs, *fudgeQQ, bZero, &bWarn_copy_A_B, wi);
                             break;
+                        case d_scattering_params: // WAXS
+                            push_bond(d, plist, mi0->plist, &(mi0->atoms), atype, pline, TRUE,
+                                      bGenPairs, *fudgeQQ, bZero, &bWarn_copy_A_B, wi);
+                            break;
                         case d_cmap:
                             push_cmap(d, plist, mi0->plist, &(mi0->atoms), atype, pline, wi);
                             break;
@@ -1020,6 +1024,9 @@ static char **read_topol(const char *infile, const char *outfile,
                                 init_block2(&(block2[nmol-1]), mi0->atoms.nr);
                             }
                             push_excl(pline, &(block2[nmol-1]), wi);
+                            break;
+                        case d_scattering_types: //WAXS
+                            push_bt(d, plist, 1, atype, NULL, pline, wi);
                             break;
                         case d_system:
                             trim(pline);

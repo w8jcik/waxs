@@ -76,6 +76,8 @@ static const char *directive_names[d_maxdir+1] = {
     "polarization",
     "water_polarization",
     "thole_polarization",
+    "scattering_types",
+    "scattering_params",
     "system",
     "molecules",
     "position_restraints",
@@ -285,6 +287,17 @@ int ifunc_index(directive d, int type)
             return F_ORIRES;
         case d_dihedral_restraints:
             return F_DIHRES;
+        case d_scattering_types:
+        case d_scattering_params:
+            switch (type)
+            {
+              case 1:
+                return F_XRAY_COUPLE;
+              case 2:
+                return F_NEUTRON_COUPLE;
+              default:
+                gmx_fatal(FARGS,"Invalid scattering type %d",type);
+            }
         default:
             gmx_fatal(FARGS, "invalid directive %s in ifunc_index (%s:%s)",
                       dir2str(d), __FILE__, __LINE__);
@@ -383,6 +396,8 @@ void DS_Init(DirStack **DS)
         set_nec(&(necessary[d_polarization]), d_atoms, d_none);
         set_nec(&(necessary[d_water_polarization]), d_atoms, d_none);
         set_nec(&(necessary[d_thole_polarization]), d_atoms, d_none);
+        set_nec(&(necessary[d_scattering_types]), d_atomtypes, d_none);
+        set_nec(&(necessary[d_scattering_params]), d_atoms, d_none);
         set_nec(&(necessary[d_dihedrals]), d_atoms, d_none);
         set_nec(&(necessary[d_constraints]), d_atoms, d_none);
         set_nec(&(necessary[d_settles]), d_atoms, d_none);

@@ -178,5 +178,7 @@ const t_interaction_function interaction_function[F_NRE] =
     def_nofc    ("DVV/DL",   "dVvdw/dl"         ),
     def_nofc    ("DVB/DL",   "dVbonded/dl"      ),
     def_nofc    ("DVR/DL",   "dVrestraint/dl"   ),
-    def_nofc    ("DVT/DL",   "dVtemperature/dl" )
+    def_nofc    ("DVT/DL",   "dVtemperature/dl" ),
+    def_nb      ("XRAY_SCATT",    "Xray coupl.",     1, 9 ),
+    def_nb      ("NEUTRON_SCATT", "Neutron coupl.",  1, 1 )
 };

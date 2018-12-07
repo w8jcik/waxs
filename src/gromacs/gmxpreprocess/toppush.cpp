@@ -920,6 +920,7 @@ void push_dihedraltype(directive d, t_params bt[],
             }
             else if (nn > nrfp)
             {
+              sprintf(errbuf, "nn = %d, nrfpA = %d, nrfp = %d", nn, nrfpA, nrfp);
                 warning_error(wi, "Too many parameters");
             }
             for (i = nn; (i < nrfp); i++)
