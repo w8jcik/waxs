@@ -3038,7 +3038,8 @@ void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, rvec xlocal[], double simtim
         }
         else if (DOMAINDECOMP(cr))
         {
-            //dd_collect_vec(cr->dd, wr->local_state, xlocal, wr->x);
+          //FIXME requires ArrayRef, need to modify do_waxs_md interface
+            dd_collect_vec(cr->dd, wr->local_state, xlocal, wr->x);
         }
         else
         {
