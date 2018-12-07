@@ -151,6 +151,8 @@ typedef enum {
     d_polarization,
     d_water_polarization,
     d_thole_polarization,
+    d_scattering_types,
+    d_scattering_params,
     d_system,
     d_molecules,
     d_position_restraints,

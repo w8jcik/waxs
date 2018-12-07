@@ -102,6 +102,7 @@
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/snprintf.h"
+#include "gromacs/waxs/sftypeio.h"
 
 static int rm_interactions(int ifunc, int nrmols, t_molinfo mols[])
 {
@@ -1337,6 +1338,181 @@ static void check_gbsa_params(gpp_atomtype_t atype)
 
 }
 
+/* Take the scattering parameters (Cromer-Mann and NSL) from the parameter list in t_molinfo and 
+ *  - put them into mtop->scattTypes, keeping each scatting type only once
+ *  - store the scattering type for each atom in atoms->atom[].nsltype or  atoms->atom[].cmtype
+ */
+static void
+add_scattering_params(t_inputrec *ir, gmx_mtop_t *sys, t_molinfo *mi, warninp_t wi)
+{
+    int i, np, mb, ip, isum, i_tot, iatom, isf;
+    int ngrps_solute, ngrps_solvent;
+    gmx_bool bSolute, bSolvent, bXray, bNeutron;
+    t_param *p = NULL;
+    t_params *plist_xray = 0, *plist_neutron = 0, *plist = 0;
+    t_atoms *atoms = NULL;
+    t_cromer_mann cm;
+    t_neutron_sl nslType;
+    char warn_buf[STRLEN];
+
+    /* The total number of unique atoms is nmoltypes * natoms_in_eas_type. */
+    isum=0;
+    /* Get number of groups, minus the 'rest' group */
+    ngrps_solute  = get_actual_ngroups( &(sys->groups), egcWAXSSolute );
+    ngrps_solvent = get_actual_ngroups( &(sys->groups), egcWAXSSolvent );
+
+    bXray    = FALSE;
+    bNeutron = FALSE;
+    for (i = 0; i<ir->waxs_nTypes; i++)
+    {
+        bXray    |= (ir->escatter[i] == escatterXRAY);
+        bNeutron |= (ir->escatter[i] == escatterNEUTRON);
+    }
+    
+    /*
+    ngrps_solute=isys->groups.grps[egcWAXSSolute].nr - 1 ;
+    ngrps_solvent=sys->groups.grps[egcWAXSSolvent].nr - 1 ;
+
+     Initiate superfluous tests to distinguish between zero groups and one group. Happens when entinre system is assigned.
+    if (ngrps_solute == 0)
+    {
+        fprintf(stderr,"Lone solute group name: %s",*(sys->groups.grpname[sys->groups.grps[egcWAXSSolute].nm_ind[0]]) );
+        if ( strncmp("rest",*(sys->groups.grpname[sys->groups.grps[egcWAXSSolute].nm_ind[0]]),4) != 0 )
+        {
+            ngrps_solute++;
+            fprintf(stderr,".\n");
+        } else
+             fprintf(stderr," - this is a fictitious group.\n");
+    }
+    if (ngrps_solvent == 0)
+    {
+        fprintf(stderr,"Lone solvent group name: %s",*(sys->groups.grpname[sys->groups.grps[egcWAXSSolvent].nm_ind[0]]) );
+        if ( strncmp("rest",*(sys->groups.grpname[sys->groups.grps[egcWAXSSolvent].nm_ind[0]]),4) != 0 )
+        {
+            ngrps_solvent++;
+            fprintf(stderr,".\n");
+        } else
+            fprintf(stderr," - this is a fictitious group.\n");
+    } */
+    fprintf(stderr,"Atomic-scattering indices: there are %d solute groups and %d solvent groups\n", ngrps_solute, ngrps_solvent);
+
+    if ( ngrps_solute == 0 && ngrps_solvent == 0 )
+        warning_note(wi, "You have elected to record scattering but have not given any groups for selection. Is this correct?\n");
+    /* For each molecule 'type' in the topology, e.g. Protein, solvent. */
+    for (mb = 0; mb < sys->nmolblock; mb++)
+    {
+        atoms = &sys->moltype[sys->molblock[mb].type].atoms;
+        plist_xray    = &(mi[sys->molblock[mb].type].plist[F_XRAY_COUPLE]);
+        plist_neutron = &(mi[sys->molblock[mb].type].plist[F_NEUTRON_COUPLE]);
+
+        /* loop over all atoms in this block. */
+        for(iatom = 0; iatom < atoms->nr; iatom++)
+        {
+            /* Enable index conversion between the systematic atom index used in the custom input and the molecular index. */
+            i_tot = iatom + isum;
+
+            bSolute = ( ngrps_solute  > 0 ) && (ggrpnr(&(sys->groups),egcWAXSSolute ,i_tot) < ngrps_solute ) ;
+            bSolvent= ( ngrps_solvent > 0 ) && (ggrpnr(&(sys->groups),egcWAXSSolvent,i_tot) < ngrps_solvent ) ;
+
+            /* Init cmtype and nsl type to unset */
+            atoms->atom[iatom].cmtype  = NOTSET;
+            atoms->atom[iatom].nsltype = NOTSET;
+
+            /* Debugging. */
+            /* if (iatom < 5) */
+            /*     fprintf(stderr,"Atom (%d,%d) group membership: %d,%d. sftype: %d.\n",i_tot+1, iatom, ggrpnr(&(sys->groups),egcWAXSSolute ,i_tot), ggrpnr(&(sys->groups),egcWAXSSolvent,i_tot), atoms->atom[iatom].cmtype ); */
+
+            if (bSolute || bSolvent)
+            {
+                /* Check for AND case */
+                if (bSolute && bSolvent)
+                {
+                    sprintf(warn_buf, "Atom nr %d (name %s) is in both solvent and solute groups. This should not be allowed.\n",
+                            i_tot+1, *(atoms->atomname[iatom]) );
+                    warning_error(wi, warn_buf);
+                }
+                /* search for this atom in parameter list */
+                /* Note: Even if you do only neutron scattering, we need Cromer-Mann parameters to compute the solvent density */
+                if (bXray || bNeutron)
+                {
+                    plist = plist_xray;
+                    np    = plist->nr;
+                    ip    = -1;
+                    // fprintf(stderr, "Looking for atom nr %d in plist\n",iatom);
+                    for (i=0; i<np; i++)
+                    {
+                        if ( plist->param[i].a[0] == iatom )
+                        {
+                            ip = i;
+                            break;
+                        }
+                    }
+                    if (ip == -1)
+                    {
+                        gmx_fatal(FARGS,"Atom nr %d (name %s) is in WAXS scattering group %s, but no\n"
+                                  "Cromer-Mann parameters are defined for this atom.\n\n"
+                                  "Use g_genscatt to generate an itp file with Cromer-Mann definitions,\n"
+                                  "and include it into the molecule type definition in the topology.\n\n"
+                                  "Note: Even if you do only neutron scattering, we need Cromer-Mann\n"
+                                  "      parameters to compute the solvent density.",
+                                  i_tot+1, *(atoms->atomname[iatom]), bSolute?"Solute":"Solvent") ;
+                    }
+                    for (i = 0; i < 4; i++)
+                    {
+                        cm.a[i] = plist->param[ip].c[i  ];
+                        cm.b[i] = plist->param[ip].c[i+4];
+                    }
+                    cm.c = plist->param[ip].c[8];
+            
+                    isf = search_scattTypes_by_cm(&sys->scattTypes, &cm);
+                    if (isf == NOTSET)
+                    {
+                        isf = add_scatteringType(&sys->scattTypes, &cm, NULL);
+                    }
+                    atoms->atom[iatom].cmtype = isf;
+                    //fprintf(stderr,"isf (ato %3d, %s) = %d, (%d total)\n",iatom,
+                    //        *(atoms->atomname[iatom]), isf, sys->scattTypes.ncm);
+                }
+                if (bNeutron)
+                {
+                    plist = plist_neutron;
+                    np    = plist->nr;
+                    ip    = -1;
+                    // fprintf(stderr, "Looking for atom nr %d in plist\n",iatom);
+                    for (i=0; i<np; i++)
+                    {
+                        if ( plist->param[i].a[0] == iatom )
+                        {
+                            ip = i;
+                            break;
+                        }
+                    }
+                    if (ip == -1)
+                    {
+                        gmx_fatal(FARGS,"Atom nr %d (name %s) is in NEUTRON scattering group %s, but no\n"
+                                  "Neutron Sattering Length (NSL) is defined for this atom.\n\n"
+                                  "Use g_genscatt to generate an itp file with NSL definitions,\n"
+                                  "and include it into the molecule type definition in the topology.",
+                                  i_tot+1, *(atoms->atomname[iatom]), bSolute?"Solute":"Solvent" ) ;
+                    }
+                    nslType.cohb = plist->param[ip].c[0];
+            
+                    isf = search_scattTypes_by_nsl( &sys->scattTypes, &nslType);
+                    if (isf == NOTSET)
+                    {
+                        isf = add_scatteringType( &sys->scattTypes, NULL, &nslType);
+                    }
+                    atoms->atom[iatom].nsltype = isf;
+                }
+            }
+        }
+        isum += atoms->nr * sys->molblock[mb].nmol;
+    }
+    fprintf(stderr, "Generated list of %2d unique Cromer-Mann types\n", sys->scattTypes.ncm);
+    fprintf(stderr, "Generated list of %2d unique NSL         types\n", sys->scattTypes.nnsl);
+    
+}
+
 static real calc_temp(const gmx_mtop_t *mtop,
                       const t_inputrec *ir,
                       rvec             *v)
@@ -2250,6 +2426,14 @@ int gmx_grompp(int argc, char *argv[])
         {
             generate_qmexcl(sys, ir, wi);
         }
+    }
+
+    /* Init scattering parameters */
+    init_scattering_types(&sys->scattTypes);
+    if (ir->waxs_nTypes > 0)
+    {
+      add_scattering_params(ir, sys, mi, wi);
+      // check_scattering_params(ir, sys, mi, wi);
     }
 
     if (ftp2bSet(efTRN, NFILE, fnm))
