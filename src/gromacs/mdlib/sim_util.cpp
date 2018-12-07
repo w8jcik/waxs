@@ -52,6 +52,7 @@
 #include "gromacs/domdec/dlbtiming.h"
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_struct.h"
+#include "gromacs/domdec/ga2la.h"
 #include "gromacs/essentialdynamics/edsam.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/gmxlib/chargegroup.h"
@@ -111,6 +112,8 @@
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/sysinfo.h"
+#include "gromacs/waxs/waxsmd.h"
+#include "gromacs/waxs/waxsmd_utils.h"
 
 #include "nbnxn_gpu.h"
 #include "nbnxn_kernels/nbnxn_kernel_cpu.h"
@@ -2981,4 +2984,83 @@ void init_md(FILE *fplog,
     clear_mat(force_vir);
     clear_mat(shake_vir);
     clear_rvec(mu_tot);
+}
+
+void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, rvec xlocal[], double simtime,
+                 gmx_int64_t step, t_forcerec *fr, gmx_mtop_t *mtop, gmx_localtop_t *top, matrix box, int ePBC,
+                 rvec f_novirsum[], gmx_wallcycle_t wcycle, real *enerXray, real *enerNeutron)
+{
+    t_waxsrec   *wr = fr->waxsrec;
+    gmx_ga2la_t ga2la;
+    int         p, ii, d, t;
+    t_pbc       *pbc = NULL;
+    const int start = 0;
+
+    /* Updating WAXS potential and forces and store in vLast / fLast */
+    if (do_per_step(step, wr->nstcalc))
+    {
+        /* Get all coordinates into Master node - not elegant for now */
+        if (cr->nnodes == 1)
+        {
+            memcpy(wr->x, xlocal, mtop->natoms*sizeof(rvec));
+        }
+        else if (DOMAINDECOMP(cr))
+        {
+            //dd_collect_vec(cr->dd, wr->local_state, xlocal, wr->x);
+        }
+        else
+        {
+            gmx_fatal(FARGS, "WAXS MD is only supported with domain decomposition (at the moment)\n");
+        }
+
+        
+        do_waxs_md_low(cr, wr->x, simtime, step, wr, mtop, box, fr->ePBC,
+                       do_per_step(step, wr->nstlog));
+    }
+
+    /* collect Xray and Neutron-derived potential */
+    *enerXray    = 0;
+    *enerNeutron = 0;
+    if (wr->bCalcPot)
+    {
+        for (t = 0; t < wr->nTypes; t++)
+        {
+            if (wr->wt[t].type == escatterXRAY)
+            {
+                *enerXray += wr->wt[t].vLast;
+            }
+            else if (wr->wt[t].type == escatterNEUTRON)
+            {
+                *enerNeutron += wr->wt[t].vLast;
+            }
+            else
+            {
+                gmx_fatal(FARGS, "Unknown scatter type %d\n", wr->wt[t].type);
+            }
+        }
+    }
+
+    if (wr->bCalcForces)
+    {
+        for(p = 0; p < wr->nindA_prot; p++)
+        {
+            ii = wr->indA_prot[p];
+            if (cr->dd)
+            {
+                if (!ga2la_get_home(cr->dd->ga2la, ii, &ii))
+                {
+                    ii = -1;
+                }
+            }
+            /* With DomDec, start=0 and end=nr of atoms on this node */
+            if (ii >= start && ii < (start+mdatoms->homenr))
+            {
+                /* ii is now the local index for f[] array */
+                /*fprintf(stderr,"Force on %d = %10g / %10g / %10g  (before %10g / %10g / %10g)\n",p,
+                        wr->fLast[p][0], wr->fLast[p][1], wr->fLast[p][2],
+                        f_novirsum[ii][0], f_novirsum[ii][1], f_novirsum[ii][2]);*/
+                rvec_inc(f_novirsum[ii], wr->fLast[p]);
+            }
+        }
+    }
 }
