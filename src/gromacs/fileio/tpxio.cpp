@@ -118,6 +118,7 @@ enum tpxv {
     tpxv_PullExternalPotential,                              /**< Added pull type external potential */
     tpxv_GenericParamsForElectricField,                      /**< Introduced KeyValueTree and moved electric field parameters */
     tpxv_AcceleratedWeightHistogram,                         /**< sampling with accelerated weight histogram method (AWH) */
+    tpxv_WaxsMDSimulation,                                   /**< Computation of WAXS curve and WAXS driven MD simulation */
     tpxv_Count                                               /**< the total number of tpxv versions */
 };
 
@@ -1807,6 +1808,62 @@ static void do_inputrec(t_fileio *fio, t_inputrec *ir, gmx_bool bRead,
         /* end of QMMM stuff */
     }
 
+    /* WAXS stuff */
+    if (file_version >= tpxv_WaxsMDSimulation)
+    {
+        gmx_fio_do_int (fio, ir->waxs_nTypes);
+        gmx_fio_do_real(fio, ir->waxs_tau);
+        gmx_fio_do_int (fio, ir->ewaxs_potential);
+        gmx_fio_do_int (fio, ir->ewaxs_Iexp_fit);
+        gmx_fio_do_int (fio, ir->ewaxs_weights);
+        gmx_fio_do_int (fio, ir->ewaxs_ensemble_type);
+        gmx_fio_do_real(fio, ir->waxs_t_target);
+        gmx_fio_do_int (fio, ir->waxs_nstcalc);
+        gmx_fio_do_int (fio, ir->waxs_nfrsolvent);
+        gmx_fio_do_int (fio, ir->waxs_J);
+        gmx_fio_do_real(fio, ir->waxs_denssolvent);
+        gmx_fio_do_real(fio, ir->waxs_denssolventRelErr);
+        gmx_fio_do_int (fio, ir->ewaxs_correctbuff);
+        gmx_fio_do_int (fio, ir->ewaxs_solvdensUnsertBayesian);
+        gmx_fio_do_int (fio, ir->ewaxs_bScaleI0);
+        gmx_fio_do_real(fio, ir->waxs_warn_lay);
+        gmx_fio_do_int (fio, ir->ewaxsaniso);
+        gmx_fio_do_int (fio, ir->waxs_nstlog);
+        gmx_fio_do_real(fio, ir->waxs_xray_energy);
+        gmx_fio_do_real(fio, ir->waxs_ensemble_fc);
+        gmx_fio_do_int (fio, ir->waxs_ensemble_nstates);
+        gmx_fio_do_int (fio, ir->waxs_npbcatom);
+        if (bRead)
+        {
+            snew(ir->escatter,             ir->waxs_nTypes);
+            snew(ir->waxs_fc,              ir->waxs_nTypes);
+            snew(ir->waxs_nq,              ir->waxs_nTypes);
+            snew(ir->waxs_start_q,         ir->waxs_nTypes);
+            snew(ir->waxs_end_q,           ir->waxs_nTypes);
+            snew(ir->waxs_deuter_conc,     ir->waxs_nTypes);
+            snew(ir->waxs_pbcatoms,        ir->waxs_npbcatom);
+            snew(ir->waxs_ensemble_init_w, ir->waxs_ensemble_nstates);
+        }
+        gmx_fio_ndo_int (fio, ir->escatter,         ir->waxs_nTypes);
+        gmx_fio_ndo_real(fio, ir->waxs_fc,          ir->waxs_nTypes);
+        gmx_fio_ndo_int (fio, ir->waxs_nq,          ir->waxs_nTypes);
+        gmx_fio_ndo_real(fio, ir->waxs_start_q,     ir->waxs_nTypes);
+        gmx_fio_ndo_real(fio, ir->waxs_deuter_conc, ir->waxs_nTypes);
+        gmx_fio_ndo_real(fio, ir->waxs_end_q,       ir->waxs_nTypes);
+        if (ir->waxs_npbcatom > 0)
+        {
+            gmx_fio_ndo_int(fio, ir->waxs_pbcatoms, ir->waxs_npbcatom);
+        }
+        if (ir->waxs_ensemble_nstates > 0)
+        {
+            if (bRead)
+            {
+                snew(ir->waxs_ensemble_init_w, ir->waxs_ensemble_nstates);
+            }
+            gmx_fio_ndo_real(fio, ir->waxs_ensemble_init_w, ir->waxs_ensemble_nstates);
+        }
+    }
+
     if (file_version >= tpxv_GenericParamsForElectricField)
     {
         gmx::FileIOXdrSerializer serializer(fio);
@@ -2403,6 +2460,13 @@ static void do_atom(t_fileio *fio, t_atom *atom, int ngrp, gmx_bool bRead,
     gmx_fio_do_ushort(fio, atom->typeB);
     gmx_fio_do_int(fio, atom->ptype);
     gmx_fio_do_int(fio, atom->resind);
+
+    if (file_version >= tpxv_WaxsMDSimulation)
+    {
+      gmx_fio_do_int(fio, atom->cmtype);
+      gmx_fio_do_int(fio, atom->nsltype);
+    }
+
     if (file_version >= 52)
     {
         gmx_fio_do_int(fio, atom->atomnumber);
@@ -2922,6 +2986,40 @@ static void set_disres_npair(gmx_mtop_t *mtop)
     }
 }
 
+static void do_scattering_types(t_fileio *fio, t_scatt_types *scattTypes, gmx_bool bRead)
+{
+    int i, ncm, nnsl;
+
+    gmx_fio_do_int(fio, scattTypes->ncm);
+    gmx_fio_do_int(fio, scattTypes->nnsl);
+
+    ncm  = scattTypes->ncm;
+    nnsl = scattTypes->nnsl;
+
+    if (bRead)
+    {
+    snew(scattTypes->cm,        ncm);
+    snew(scattTypes->nsl,       nnsl);
+    }
+
+    for(i = 0; i < ncm; i++)
+    {
+        gmx_fio_do_real( fio, scattTypes->cm[i].a[0] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].a[1] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].a[2] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].a[3] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].b[0] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].b[1] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].b[2] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].b[3] );
+        gmx_fio_do_real( fio, scattTypes->cm[i].c );
+    }
+    for(i = 0; i < nnsl; i++)
+    {
+    gmx_fio_do_real( fio, scattTypes->nsl[i].cohb );
+    }
+}
+
 static void do_mtop(t_fileio *fio, gmx_mtop_t *mtop, gmx_bool bRead,
                     int file_version)
 {
@@ -3013,6 +3111,15 @@ static void do_mtop(t_fileio *fio, gmx_mtop_t *mtop, gmx_bool bRead,
         do_idef (fio, &mtop->ffparams, &mtop->moltype[0], bRead, file_version);
         mtop->natoms = mtop->moltype[0].atoms.nr;
     }
+
+    if (bRead)
+    {
+        mtop->scattTypes.ncm       = 0;
+        mtop->scattTypes.nnsl      = 0;
+        mtop->scattTypes.cm        = NULL;
+        mtop->scattTypes.nsl       = NULL;
+    }
+    do_scattering_types( fio, &mtop->scattTypes, bRead);
 
     if (file_version >= 65)
     {
