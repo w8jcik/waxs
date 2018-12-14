@@ -1731,7 +1731,7 @@ static void do_force_cutsVERLET(FILE *fplog, t_commrec *cr,
         /* Compute WAXS intensity, potential, & forces.
            These are computed here because the forces should not go into the virial.
         */
-        do_waxs_md(cr, mdatoms, as_rvec_array(x.data()), t, step, fr, mtop, top, box, inputrec->ePBC, f,
+        do_waxs_md(cr, mdatoms, x, t, step, fr, mtop, top, box, inputrec->ePBC, f,
                    wcycle,
                    &enerd->term[F_XRAY_COUPLE],
                    &enerd->term[F_NEUTRON_COUPLE]);
@@ -2081,8 +2081,7 @@ static void do_force_cutsGROUP(FILE *fplog, t_commrec *cr,
         /* Compute WAXS intensity, potential, & forces.
            These are computed here because the forces should not go into the virial.
         */
-        fprintf(fplog, "RUNNING WAXS MD....LALALA!!\n");
-        do_waxs_md(cr, mdatoms, as_rvec_array(x.data()), t, step, fr, mtop, top, box, inputrec->ePBC, f,
+        do_waxs_md(cr, mdatoms, x, t, step, fr, mtop, top, box, inputrec->ePBC, f,
                    wcycle,
                    &enerd->term[F_XRAY_COUPLE],
                    &enerd->term[F_NEUTRON_COUPLE]);
@@ -3018,7 +3017,7 @@ void init_md(FILE *fplog,
     clear_rvec(mu_tot);
 }
 
-void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, rvec xlocal[], double simtime,
+void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, gmx::PaddedArrayRef<gmx::RVec> xlocal, double simtime,
                  gmx_int64_t step, t_forcerec *fr, gmx_mtop_t *mtop, gmx_localtop_t *top, matrix box, int ePBC,
                  rvec f_novirsum[], gmx_wallcycle_t wcycle, real *enerXray, real *enerNeutron)
 {

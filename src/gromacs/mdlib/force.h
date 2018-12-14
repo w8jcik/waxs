@@ -108,7 +108,7 @@ real do_walls(t_inputrec *ir, t_forcerec *fr, matrix box, t_mdatoms *md,
               rvec x[], rvec f[], real lambda, real Vlj[], t_nrnb *nrnb);
 
 /* In sim_util.c : Compute SWAXS / Neutron scattering curve and possibly do coupling. */
-void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, rvec xlocal[],
+void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, gmx::PaddedArrayRef<gmx::RVec> xlocal,
                  double t, gmx_int64_t step, t_forcerec *fr, gmx_mtop_t *mtop, gmx_localtop_t *top, matrix box,
                  int ePBC, rvec f_novirsum[], gmx_wallcycle_t wcycle,
                  real *enerXray, real *enerNeutron);
