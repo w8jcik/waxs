@@ -1050,6 +1050,100 @@ void pr_inputrec(FILE *fp, int indent, const char *title, const t_inputrec *ir,
             pr_expandedvals(fp, indent, ir->expandedvals, ir->fepvals->n_lambda);
         }
 
+        /*  WAXS stuff */
+        fprintf(fp,"scatt-coupl %s", bMDPformat ? " = " : ":");
+        if (ir->waxs_nTypes > 0)
+        {
+            for(int i=0; i < ir->waxs_nTypes; i++)
+            {
+                switch (ir->escatter[i])
+                {
+                case escatterXRAY:
+                    fprintf(fp, " xray");
+                    break;
+                case escatterNEUTRON:
+                    fprintf(fp, " neutron");
+                    break;
+                default:
+                    fprintf(fp," invalid (%d)", ir->escatter[i]);
+                    break;
+                }
+            }
+            fprintf(fp, "\n");
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-pbcatom (ntot=%d) %s", ir->waxs_npbcatom, bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_npbcatom; i++)
+            {
+                fprintf(fp, " %d", ir->waxs_pbcatoms[i]);
+            }
+            fprintf(fp,"\n");
+            
+            PR("waxs-tau",         ir->waxs_tau);
+            PS("waxs-potential",   EWAXSPOTENTIAL(ir->ewaxs_potential));
+            PS("waxs-weights",     		EWAXSWEIGHTS(ir->ewaxs_weights));
+            PS("waxs_ensemble_type",    EWAXSENSEMBLES(ir->ewaxs_ensemble_type));
+            PR("waxs-t-target",    ir->waxs_t_target);
+            PI("waxs-nstcalc",     ir->waxs_nstcalc);
+            PI("waxs-nfrsolvent",  ir->waxs_nfrsolvent);
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-fc %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_nTypes; i++)
+            {
+              fprintf(fp, " %g", ir->waxs_fc[i]);
+            }
+            fprintf(fp, "\n");
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-nq %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_nTypes; i++)
+            {
+              fprintf(fp, " %d", ir->waxs_nq[i]);
+            }
+            fprintf(fp, "\n");
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-start-q %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_nTypes; i++)
+            {
+              fprintf(fp, " %g", ir->waxs_start_q[i]);
+            }
+            fprintf(fp, "\n");
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-end-q %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_nTypes; i++)
+            {
+              fprintf(fp," %g", ir->waxs_end_q[i]);
+            }
+            fprintf(fp, "\n");
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-deuter-conc %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_nTypes; i++)
+            {
+              fprintf(fp," %g", ir->waxs_deuter_conc[i]);
+            }
+            fprintf(fp, "\n");
+            PI("waxs-J",                ir->waxs_J);
+            PS("waxs-Iexp-fit",         EWAXSIEXPFIT(ir->ewaxs_Iexp_fit));
+            PR("waxs-solvdens",         ir->waxs_denssolvent);
+            PR("waxs-solvdens-uncert",  ir->waxs_denssolventRelErr);
+            PS("waxs-solvdens-unsert-bayesian", EWAXSSOLVDENSUNCERTBAYESIAN(ir->ewaxs_solvdensUnsertBayesian));
+            PS("waxs-correct-buffer",   EWAXSCORRECTBUFF(ir->ewaxs_correctbuff));
+            PR("waxs-warnlay",          ir->waxs_warn_lay);
+            PS("waxs-anisotropic",      EWAXSANISO(ir->ewaxsaniso));
+            PI("waxs-nstlog",           ir->waxs_nstlog);
+            PI("waxs-nfrsolvent",       ir->waxs_nfrsolvent);
+            PS("waxs-scale-i0",         EWAXSBSCALEI0(ir->ewaxs_bScaleI0));
+            PR("waxs-xray-energy",      ir->waxs_xray_energy);
+            PS("waxs-ensemble-type",    EWAXSENSEMBLES(ir->ewaxs_ensemble_type));
+            PI("waxs-ensemble-nstates", ir->waxs_ensemble_nstates);
+            pr_indent(fp, indent);
+            fprintf(fp, "waxs-ensemble-init-w %s", bMDPformat ? " = " : ":");
+            for(int i = 0; i < ir->waxs_ensemble_nstates; i++)
+            {
+              fprintf(fp, " %g", ir->waxs_ensemble_init_w[i]);
+            }
+            fprintf(fp,"\n");
+            PR("waxs-ensemble-fc", ir->waxs_ensemble_fc);
+            fprintf(fp,"\n");
+        }
         /* NON-equilibrium MD stuff */
         PR("cos-acceleration", ir->cos_accel);
         pr_matrix(fp, indent, "deform", ir->deform, bMDPformat);
