@@ -39,7 +39,6 @@
 #include <math.h>
 #include <cstring>
 #include "gromacs/waxs/gmx_envelope.h"
-//#include "gromacs/swax/sysstuff.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/math/functions.h"
@@ -49,73 +48,25 @@
 #include "gromacs/utility/gmxomp.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/waxs/gmx_miniball.h"
+#include "gromacs/simd/simd.h"
+#include "gromacs/simd/simd_math.h"
 
 
 /*
  *  This source file was written by Jochen Hub.
  */
 
-/* include the right header file */
-#ifdef GMX_DOUBLE
-
-#if   defined(GMX_X86_AVX_256)
-#include "gmx_math_x86_avx_256_double.h"
-#elif defined(GMX_X86_AVX_128_FMA)
-#include "gmx_math_x86_avx_128_fma_double.h"
-#elif defined(GMX_X86_SSE4_1)
-#include "gmx_math_x86_sse4_1_double.h"
-#elif defined(GMX_X86_SSE2)
-#include "gmx_math_x86_sse2_double.h"
-#endif
-
-#else  /* single prec. */
-
-#if   defined(GMX_X86_AVX_256)
-#include "gmx_math_x86_avx_256_single.h"
-#elif defined(GMX_X86_AVX_128_FMA)
-#include "gmx_math_x86_avx_128_fma_single.h"
-#elif defined(GMX_X86_SSE4_1)
-#include "gmx_math_x86_sse4_1_single.h"
-#elif defined(GMX_X86_SSE2)
-#include "gmx_math_x86_sse2_single.h"
-#endif
-#endif /* GMX_DOUBLE */
-
-/* Macro names for AVX/SSE instructions */
-#ifdef GMX_X86_AVX_256
-/* AVX256 */
-#ifdef GMX_DOUBLE
-#define REGISTER __m256d
-#define REGISTER_SINCOS gmx_mm256_sincos_pd
-#else
-#define REGISTER __m256
-#define REGISTER_SINCOS gmx_mm256_sincos_ps
-
-#endif
-
-#elif defined(GMX_X86_AVX_128_FMA) || defined(GMX_X86_SSE4_1) || defined(GMX_X86_SSE2)
-/* AVX_128_FMA, SSE2, or SSE4.1 */
-#ifdef GMX_DOUBLE
-#define REGISTER __m128d
-#define REGISTER_SINCOS gmx_mm_sincos_pd
-#else
-#define REGISTER __m128
-#define REGISTER_SINCOS gmx_mm_sincos_ps
-#endif
-
-#else
-/* No acceleration */
 #define GMX_WAXS_NO_ACCELERATION
-#define REGISTER double
-#endif
+#define REGISTER_SINCOS sincos
 
 #ifdef GMX_DOUBLE
+#define REGISTER double
+#else
+#define REGISTER float
+#endif
+
 #define COS cos
 #define SIN sin
-#else
-#define COS cosf
-#define SIN sinf
-#endif
 
 
 // #define WAXS_ENVELOPE_NR_POINTS 50
