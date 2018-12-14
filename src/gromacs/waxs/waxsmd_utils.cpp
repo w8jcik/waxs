@@ -1144,6 +1144,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
     char *dumtitle;
     t_atoms *dumatoms;
     matrix dummybox;
+    t_symtab symtab;
 
     snew(dumtitle, STRLEN);
 
@@ -1160,12 +1161,13 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
     get_coordnum(fn, &nread);
     snew(dumatoms,1);
     init_t_atoms(dumatoms, nread, FALSE);
+    open_symtab(&symtab);
 
     if (nread == nsys)
     {
         /* Whole system */
         fprintf(stderr,"\nReading fit-reference coords of: system\n");
-        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, x_ref, nullptr, dummybox);
+        gmx_gro_read_conf(fn, &symtab, &dumtitle, dumatoms, x_ref, nullptr, dummybox);
     }
     else if (nread == nsol)
     {
@@ -1177,7 +1179,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
         }
 
         fprintf(stderr,"\nReading fit-reference coords of: solute\n");
-        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
+        gmx_gro_read_conf(fn, &symtab, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
         for (i=0; i<nread; i++)
         {
             copy_rvec(xtemp[i],x_ref[isol[i]]);
@@ -1193,7 +1195,7 @@ read_fit_reference(const char* fn, rvec x_ref[], int nsys, atom_id* isol, int ns
         }
 
         fprintf(stderr,"\nReading fit-reference coords of: fit-group\n");
-        gmx_gro_read_conf(fn, nullptr, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
+        gmx_gro_read_conf(fn, &symtab, &dumtitle, dumatoms, xtemp, nullptr, dummybox);
         for (i=0; i<nread; i++)
         {
             copy_rvec(xtemp[i],x_ref[ifit[i]]);
