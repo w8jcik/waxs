@@ -788,6 +788,25 @@ static void bc_atomtypes(const t_commrec *cr, t_atomtypes *atomtypes)
     nblock_bc(cr, nr, atomtypes->S_hct);
 }
 
+static void bc_scattTypes(const t_commrec *cr, t_scatt_types *scattTypes)
+{
+    int ncm, nnsl;
+
+    /* move Cromer-Mann parameteres */
+    block_bc(cr, scattTypes->ncm);
+    ncm = scattTypes->ncm;
+
+    snew_bc(cr, scattTypes->cm, ncm);
+    nblock_bc(cr, ncm, scattTypes->cm);
+
+    /* move neutron scattering lengths */
+    block_bc(cr, scattTypes->nnsl);
+    nnsl = scattTypes->nnsl;
+
+    snew_bc(cr, scattTypes->nsl, nnsl);
+    nblock_bc(cr, nnsl, scattTypes->nsl);
+}
+
 /*! \brief Broadcasts ir and mtop from the master to all nodes in
  * cr->mpi_comm_mygroup. */
 static
@@ -843,6 +862,7 @@ void bcast_ir_mtop(const t_commrec *cr, t_inputrec *inputrec, gmx_mtop_t *mtop)
 
     bc_block(cr, &mtop->mols);
     bc_groups(cr, &mtop->symtab, mtop->natoms, &mtop->groups);
+    bc_scattTypes(cr,&mtop->scattTypes);
 }
 
 void init_parallel(t_commrec *cr, t_inputrec *inputrec,
