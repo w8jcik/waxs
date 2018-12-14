@@ -3033,12 +3033,12 @@ void do_waxs_md (t_commrec *cr, t_mdatoms *mdatoms, gmx::PaddedArrayRef<gmx::RVe
         /* Get all coordinates into Master node - not elegant for now */
         if (cr->nnodes == 1)
         {
-            memcpy(wr->x, xlocal, mtop->natoms*sizeof(rvec));
+            memcpy(wr->x, as_rvec_array(xlocal.data()), mtop->natoms*sizeof(rvec));
         }
         else if (DOMAINDECOMP(cr))
         {
-          //FIXME requires ArrayRef, need to modify do_waxs_md interface
-            dd_collect_vec(cr->dd, wr->local_state, xlocal, wr->x);
+            dd_collect_vec(cr->dd, wr->local_state, xlocal,
+                           gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec *>(wr->x), mtop->natoms));
         }
         else
         {
