@@ -36,8 +36,6 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-//#include "sysstuff.h"
-//#include "typedefs.h"
 #include <cstring>
 #include "gromacs/math/invertmatrix.h"
 #include "gromacs/utility/arrayref.h"

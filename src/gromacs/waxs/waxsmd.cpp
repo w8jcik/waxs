@@ -45,124 +45,65 @@
 #endif
 
 /* Do we need some #ifdef statement here (such as GMX_THREAD_SHM_FDECOMP) ?? */
-#include <pthread.h>
-
+#include <cstring>
 #include <ctype.h>
-#include "gromacs/utility/smalloc.h"
-#include "gromacs/utility/futil.h"
-#include "gromacs/math/utilities.h"
-#include "gromacs/utility/fatalerror.h"
-#include "gromacs/math/vec.h"
-#include "gromacs/topology/index.h"
-#include "gromacs/utility/strdb.h"
+#include <pthread.h>
+#include <time.h>
+#include <sys/time.h>
+
+
+#include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/gmxlib/network.h"
+#include "gromacs/gmxpreprocess/notset.h"
+#include "gromacs/fileio/checkpoint.h"
 #include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/matio.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/trrio.h"
 #include "gromacs/fileio/trxio.h"
-#include "gromacs/fileio/tpxio.h"
-#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/xdrf.h"
+#include "gromacs/fileio/xtcio.h"
 #include "gromacs/fileio/xvgr.h"
-#include "gromacs/fileio/matio.h"
-#include "gromacs/gmxana/gmx_ana.h"
-#include "gromacs/waxs/waxsmd.h"
-#include "gromacs/pbcutil/pbc.h"
-#include "gromacs/pbcutil/rmpbc.h"
-#include "gromacs/fileio/confio.h"
+#include "gromacs/math/do_fit.h"
+#include "gromacs/math/gmxcomplex.h"
+#include "gromacs/math/units.h"
+#include "gromacs/math/utilities.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdrun.h"
 #include "gromacs/mdlib/ns.h"
 #include "gromacs/mdlib/nsgrid.h"
-#include "gromacs/fileio/xtcio.h"
-//#include "randframes.h"
-#include "gromacs/waxs/sftypeio.h"
-#include "gromacs/topology/mtop_util.h"
-#include "gromacs/mdlib/mdrun.h"
-#include "gromacs/utility/txtdump.h"
-#include "gromacs/math/do_fit.h"
-#include "gromacs/waxs/waxsmd_utils.h"
-#include "gromacs/waxs/gmx_envelope.h"
-#include "gromacs/fileio/xdrf.h"
-#include "gromacs/fileio/checkpoint.h"
-#include <time.h>
-#include "gromacs/timing/wallcycle.h"
-#include "gromacs/utility/qsort_threadsafe.h"
-#include "gromacs/mdlib/gmx_omp_nthreads.h"
-#include "gromacs/utility/gmxomp.h"
-#include "gromacs/gmxlib/network.h"
-#include "gromacs/math/gmxcomplex.h"
-#include "gromacs/gmxpreprocess/notset.h"
-#include "gromacs/waxs/gmx_envelope.h"
-#include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/math/units.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/simd/simd.h"
+#include "gromacs/simd/simd_math.h"
+#include "gromacs/timing/wallcycle.h"
+#include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/topology/index.h"
+#include "gromacs/topology/mtop_util.h"
+#include "gromacs/utility/gmxomp.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/qsort_threadsafe.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/strdb.h"
+#include "gromacs/utility/txtdump.h"
+#include "gromacs/waxs/sftypeio.h"
+#include "gromacs/waxs/gmx_envelope.h"
+#include "gromacs/waxs/waxsmd.h"
+#include "gromacs/waxs/waxsmd_utils.h"
 
 #if 0
 #include "gromacs/waxs/scattering_amplitude_cuda.cuh" /* for calculation of scattering amplitude on GPU */
 #endif
-#include <sys/time.h>
-#include <cstring>
 
-/* include the right header file */
-#ifdef GMX_DOUBLE
-
-#if   defined(GMX_X86_AVX_256)
-#include "gmx_math_x86_avx_256_double.h"
-#elif defined(GMX_X86_AVX_128_FMA)
-#include "gmx_math_x86_avx_128_fma_double.h"
-#elif defined(GMX_X86_SSE4_1)
-#include "gmx_math_x86_sse4_1_double.h"
-#elif defined(GMX_X86_SSE2)
-#include "gmx_math_x86_sse2_double.h"
-#endif
-
-#else  /* single prec. */
-
-#if   defined(GMX_X86_AVX_256)
-#include "gmx_math_x86_avx_256_single.h"
-#elif defined(GMX_X86_AVX_128_FMA)
-#include "gmx_math_x86_avx_128_fma_single.h"
-#elif defined(GMX_X86_SSE4_1)
-#include "gmx_math_x86_sse4_1_single.h"
-#elif defined(GMX_X86_SSE2)
-#include "gmx_math_x86_sse2_single.h"
-#endif
-#endif /* GMX_DOUBLE */
-
-
-#define GMX_WAXS_NO_SIMD
-
-/*
- * Macro names for AVX/SSE instructions
- */
-#if defined(GMX_WAXS_NO_SIMD)
-
-/* Generic placeholders, in case we don't use SIMD - only kept for testing */
-#define REGISTER real
-#define REGISTER_SINCOS waxs_sincos_real
-#define REGISTER_MUL(a,b) ((a)*(b))
-
-#elif defined(GMX_X86_AVX_256)
-
-#ifdef GMX_DOUBLE
-#define REGISTER __m256d
-#define REGISTER_SINCOS gmx_mm256_sincos_pd
-#define REGISTER_MUL    _mm256_mul_pd
-#else
-#define REGISTER __m256
-#define REGISTER_SINCOS gmx_mm256_sincos_ps
-#define REGISTER_MUL    _mm256_mul_ps
-#endif
-
-#elif defined(GMX_X86_AVX_128_FMA) || defined(GMX_X86_SSE4_1) || defined(GMX_X86_SSE2)
-/* AVX_128_FMA, SSE2, or SSE4.1 */
-#ifdef GMX_DOUBLE
-#define REGISTER __m128d
-#define REGISTER_SINCOS gmx_mm_sincos_pd
-#define REGISTER_MUL    _mm_mul_pd
-#else
-#define REGISTER __m128
-#define REGISTER_SINCOS gmx_mm_sincos_ps
-#define REGISTER_MUL    _mm_mul_ps
-#endif
-
-#endif /* SIMD level */
+#define REGISTER gmx::SimdReal
+#define COS gmx::cos
+#define SIN gmx::sin
+#define REGISTER_SINCOS gmx::sincos
 
 #define gmx_large_int_pfmt "%ld"
 
@@ -3391,8 +3332,8 @@ compute_scattering_amplitude (t_complex *scatt_amplitude, rvec *atomEnvelope_coo
         for (k = 0; k < qhomenr; k += nReal)
         {
             REGISTER_SINCOS(*m_qdotx, &sinm, &cosm);
-            *mRe = REGISTER_MUL(*m_aff, cosm);
-            *mIm = REGISTER_MUL(*m_aff, sinm);
+            *mRe = *m_aff * cosm;
+            *mIm = *m_aff * sinm;
 
             m_qdotx++;
             m_aff++;

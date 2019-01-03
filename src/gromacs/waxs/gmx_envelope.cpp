@@ -56,17 +56,10 @@
  *  This source file was written by Jochen Hub.
  */
 
-#define GMX_WAXS_NO_ACCELERATION
-#define REGISTER_SINCOS sincos
-
-#ifdef GMX_DOUBLE
-#define REGISTER double
-#else
-#define REGISTER float
-#endif
-
-#define COS cos
-#define SIN sin
+#define REGISTER gmx::SimdReal
+#define COS gmx::cos
+#define SIN gmx::sin
+#define REGISTER_SINCOS gmx::sincos
 
 
 // #define WAXS_ENVELOPE_NR_POINTS 50
