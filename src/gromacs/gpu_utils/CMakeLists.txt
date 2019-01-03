@@ -45,9 +45,11 @@ if(GMX_USE_OPENCL)
 elseif(GMX_USE_CUDA)
     gmx_add_libgromacs_sources(
         cudautils.cu
+        device_averages.cu
         gpu_utils.cu
         pinning.cu
         pmalloc_cuda.cu
+        scattering_amplitude_cuda.cu
         )
 else()
     gmx_add_libgromacs_sources(

@@ -96,9 +96,8 @@
 #include "gromacs/waxs/waxsmd.h"
 #include "gromacs/waxs/waxsmd_utils.h"
 
-#if 0
-#include "gromacs/waxs/scattering_amplitude_cuda.cuh" /* for calculation of scattering amplitude on GPU */
-#endif
+/* for calculation of scattering amplitude on GPU */
+#include "gromacs/gpu_utils/scattering_amplitude_cuda.cuh"
 
 #define REGISTER gmx::SimdReal
 #define COS gmx::cos
@@ -4660,13 +4659,11 @@ init_waxs_md( t_waxsrec *wr,
 
     if (wr->nfrsolvent > 0)
     {
-#if 0
         /* Unit FT is only calculated once. It is therefore also only copied once to GPU */
         if (wr->bUseGPU == TRUE)
         {
             push_unitFT_to_GPU(wr);
         }
-#endif
     }
 
     if (MASTER(cr))
@@ -4976,14 +4973,12 @@ init_waxs_md( t_waxsrec *wr,
 
     if (ir->cutoff_scheme == ecutsVERLET)
     {
-#if 0
         /* Here all data is copied to GPU that will remain constantly there. It initializes the GPU for all scattering types. */
         if (wr->bUseGPU)
         {
             init_gpudata_type(wr);
         }
         fprintf(stderr, "Initiated data for SAXS/SANS calculations on the GPU.\n");
-#endif
     }
 
     /* Init computing time measurements */
@@ -5629,13 +5624,11 @@ void calculate_I_dkI (t_waxsrec *wr, t_commrec *cr)
             if (wr->bUseGPU)
             {
                 waxs_debug("wr->bCalcForces with gpu");
-#if 0  
                 double GPU_time ;
 
                 calculate_dkI_GPU (t, wd->dkI , wr->atomEnvelope_coord_A, wt->atomEnvelope_scatType_A, qstart, qhomenr, nabs, nprot, &GPU_time, cr);
 
                 waxsTimingDo(wr, waxsTimedkI, waxsTimingAction_add, GPU_time/1000, cr);
-#endif
             }
             else
             {
@@ -6980,7 +6973,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
         }
     }
 
-#if 0
     /* The envelope of the solvent density is needed on the GPU already in the first WAXS-step.
      * Attention: On the GPU we never recalculate the FT we only pass the values of the solvent FT by reference!
     */
@@ -6988,7 +6980,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
     {
         update_envelope_solvent_density_GPU( wr );
     }
-#endif
 
     waxsTimingDo(wr, waxsTimeScattAmplitude, waxsTimingAction_start, 0, cr);
 
@@ -7079,7 +7070,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
             if (wr->bUseGPU)
             {
 
-#if 0
                 compute_scattering_amplitude_cuda (wr,cr,  t, wd->B, wr->atomEnvelope_coord_B , wt->atomEnvelope_scatType_B , wr->isizeB, 0,
                                                            qhomenr,
                                                            wt->type == escatterXRAY    ? wt->aff_table : NULL,
@@ -7087,7 +7077,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
                                                            wt->qvecs->nabs,
                                                            wd->normA, wd->normB, wr->scale, wr->bCalcForces, wr->bFixSolventDensity,
                                                            &time_ms);
-#endif
             }
             else
             {
@@ -7104,7 +7093,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
         /* Compute instantanous scattering amplitude of protein + hydration layer, A(\vec{q}) */
         if (wr->bUseGPU)
         {
-#if 0
             compute_scattering_amplitude_cuda (wr,cr, t, wd->A , wr->atomEnvelope_coord_A, wt->atomEnvelope_scatType_A, wr->isizeA, wr->nindA_prot,
                                                       qhomenr,
                                                       wt->type == escatterXRAY    ? wt->aff_table : NULL,
@@ -7112,7 +7100,6 @@ do_waxs_md_low (t_commrec *cr, rvec x[], double simtime,
                                                       wt->qvecs->nabs,
                                                       wd->normA , wd->normB , wr->scale , wr->bCalcForces, wr->bFixSolventDensity,
                                                       &time_ms);
-#endif
         }
         else
         {
